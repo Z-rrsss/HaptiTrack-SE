@@ -25,12 +25,15 @@ It is written from scratch and shares no code or assets with any other app.
 1. **Scroll haptics** — a configurable haptic pulse per scroll detent, with
    sensitivity control and speed adaptation. *(done)*
 2. **Edge controls** — slide along an edge of the trackpad to drive volume,
-   brightness or the Night Shift white point, with a haptic tick per step. Each
-   of the four edges is configured separately. *(done)*
+   brightness, the keyboard backlight or the Night Shift white point, with a
+   haptic tick per step. Each of the four edges is configured separately, and
+   the settings panel draws the trackpad to scale with the edge being
+   configured lit up. *(done)*
 3. **System-wide haptic feedback** — additional user-configurable haptic cues.
 
-Audible "click" sounds are intentionally out of scope for module 1; they may
-arrive in a later module.
+Audible "click" sounds are intentionally out of scope for the scroll and edge
+haptics; the only sound the app makes is the click that punctuates the launch
+flourish, twice, once per process.
 
 ## Requirements
 
@@ -88,13 +91,28 @@ events. Scroll deltas and finger positions are consumed in memory to decide
 when to fire a pulse and are never stored or transmitted. The app makes no
 network requests.
 
+## The launch intro
+
+Starting the app plays a flourish once per process: a purple vignette closing in
+from the edges of the screen, the name in the middle, two pulses — each one a
+haptic tick and a quiet click together — and gone in under two seconds. A menu
+bar agent otherwise launches invisibly, and the one thing this app is about is
+the thing a silent launch cannot show.
+
+It is a borderless, non-activating overlay at screen saver level: it takes no
+clicks, never becomes the key window, never pulls focus from what you were
+doing, and closes itself. Turning on **Reduce Motion** in System Settings →
+Accessibility → Display skips it entirely.
+
 ## A note on private API
 
 Module 1 uses nothing but public API. Module 2 cannot: macOS exposes no public
 way to read absolute finger positions, to set the brightness of a built-in
-display, or to change the Night Shift colour temperature. HaptiTrack uses the
-same private frameworks every trackpad and brightness utility on macOS relies
-on — `MultitouchSupport`, `DisplayServices`/`CoreDisplay` and `CoreBrightness`.
+display, to change the Night Shift colour temperature, or to move the keyboard
+backlight. HaptiTrack uses the same private frameworks every trackpad and
+brightness utility on macOS relies on — `MultitouchSupport`,
+`DisplayServices`/`CoreDisplay` and `CoreBrightness` (both `CBBlueLightClient`
+for the white point and `KeyboardBrightnessClient` for the backlight).
 
 This is a deliberate, documented trade-off rather than an accident:
 
@@ -115,6 +133,7 @@ HaptiTrack/
   App/            AppDelegate, entry point, menu bar item, permission checks
   Core/           Shared pieces: the tick accumulator, private-framework loading
   Haptics/        HapticEngine protocol + NSHapticFeedbackManager backend
+  Launch/         The intro overlay played once per process
   ScrollEngine/   CGEventTap plumbing, scroll-specific wiring
   EdgeControls/   Multitouch monitor, edge geometry, gesture engine
     Controls/     AdjustableControl protocol and its implementations
@@ -133,6 +152,13 @@ millimetres of finger travel. Same code, same feel.
 **`AdjustableControl`** is what makes an edge a knob rather than a volume
 button. Anything that can express itself as a `0...1` value can be assigned to
 an edge; the gesture code knows nothing about audio or displays.
+
+**`isAvailable` and `isSupported`** are two different questions a control has to
+answer. Availability moves with whatever is plugged in — an external display can
+take brightness away and give it back — so an unavailable control stays in the
+assignment picker with a note explaining itself. Support is a fact about the
+Mac: a desktop will never grow a backlit keyboard, so that control is left out
+of the picker entirely rather than offered and then explained away.
 
 Haptic output likewise sits behind a `HapticEngine` protocol. The shipping
 backend uses the public `NSHapticFeedbackManager` API; the protocol exists so an
