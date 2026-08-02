@@ -52,15 +52,6 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		AA0000000000000000000031 = {
-			isa = PBXGroup;
-			children = (
-				AA0000000000000000000040 /* HaptiTrack */,
-				AA0000000000000000000041 /* HaptiTrackTests */,
-				AA0000000000000000000030 /* Products */,
-			);
-			sourceTree = "<group>";
-		};
 		AA0000000000000000000030 /* Products */ = {
 			isa = PBXGroup;
 			children = (
@@ -68,6 +59,15 @@
 				AA0000000000000000000021 /* HaptiTrackTests.xctest */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		AA0000000000000000000031 = {
+			isa = PBXGroup;
+			children = (
+				AA0000000000000000000040 /* HaptiTrack */,
+				AA0000000000000000000041 /* HaptiTrackTests */,
+				AA0000000000000000000030 /* Products */,
+			);
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */

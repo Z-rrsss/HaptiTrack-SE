@@ -3,8 +3,8 @@ import Combine
 import OSLog
 
 /// Wires the three pieces of module 1 together: the event tap that sees the
-/// scrolling, the detent engine that decides when a notch is due, and the
-/// haptic engine that makes it felt.
+/// scrolling, the shared tick accumulator that decides when a notch is due, and
+/// the haptic engine that makes it felt.
 ///
 /// It also owns the lifecycle around them — settings changes, the Accessibility
 /// permission, and recovering once the permission is granted.
@@ -24,7 +24,7 @@ final class ScrollHapticsController: ObservableObject {
 
     private let settings: SettingsStore
     private let haptics: HapticEngine
-    private let detents: ScrollDetentEngine
+    private let ticks: TickAccumulator
 
     private var eventTap: ScrollEventTap?
     private var permissionTimer: Timer?
@@ -39,7 +39,7 @@ final class ScrollHapticsController: ObservableObject {
     init(settings: SettingsStore, haptics: HapticEngine = SystemHapticEngine()) {
         self.settings = settings
         self.haptics = haptics
-        self.detents = ScrollDetentEngine(configuration: settings.detentConfiguration)
+        self.ticks = TickAccumulator(configuration: settings.scrollTickConfiguration)
 
         // `objectWillChange` fires just *before* a property changes, so the hop
         // through the run loop is what makes the settings read below see the
@@ -55,7 +55,7 @@ final class ScrollHapticsController: ObservableObject {
     /// Brings the module in line with the current preferences. Safe to call at
     /// any time, and idempotent.
     func applySettings() {
-        detents.configuration = settings.detentConfiguration
+        ticks.configuration = settings.scrollTickConfiguration
 
         if settings.isScrollHapticsEnabled {
             start()
@@ -84,7 +84,7 @@ final class ScrollHapticsController: ObservableObject {
         do {
             try tap.start()
             eventTap = tap
-            detents.reset()
+            ticks.reset()
             haptics.prepare()
             stopPermissionPolling()
             status = .running
@@ -103,7 +103,7 @@ final class ScrollHapticsController: ObservableObject {
         }
         eventTap?.stop()
         eventTap = nil
-        detents.reset()
+        ticks.reset()
         haptics.teardown()
         status = .stopped
         logger.info("Scroll haptics stopped.")
@@ -122,14 +122,14 @@ final class ScrollHapticsController: ObservableObject {
         guard settings.isScrollHapticsEnabled else { return }
         guard sample.isContinuous || settings.respondsToMouseWheel else { return }
 
-        if sample.phase == .momentum, !settings.isMomentumHapticsEnabled {
+        if sample.phase == .coasting, !settings.isMomentumHapticsEnabled {
             // Treat coasting as the end of the gesture: drop the accumulated
             // distance so it cannot pay out once the next gesture starts.
-            detents.reset()
+            ticks.reset()
             return
         }
 
-        let outcome = detents.consume(
+        let outcome = ticks.consume(
             delta: sample.delta,
             timestamp: sample.timestamp,
             phase: sample.phase

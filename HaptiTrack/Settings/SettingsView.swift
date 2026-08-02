@@ -32,7 +32,7 @@ struct SettingsView: View {
             Section("Behaviour") {
                 Toggle("Keep ticking while the scroll coasts", isOn: $settings.isMomentumHapticsEnabled)
                 Toggle("Also respond to mouse wheels", isOn: $settings.respondsToMouseWheel)
-                detentRateSlider
+                tickRateSlider
             }
 
             Section {
@@ -105,16 +105,16 @@ struct SettingsView: View {
         }
     }
 
-    private var detentRateSlider: some View {
+    private var tickRateSlider: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
                 Text("Maximum tick rate")
                 Spacer()
-                Text("\(Int(settings.maximumDetentRate.rounded())) / s")
+                Text("\(Int(settings.maximumTickRate.rounded())) / s")
                     .monospacedDigit()
                     .foregroundStyle(.secondary)
             }
-            Slider(value: $settings.maximumDetentRate, in: SettingsStore.detentRateRange)
+            Slider(value: $settings.maximumTickRate, in: SettingsStore.tickRateRange)
             Text("Above this speed the notches spread out instead of packing "
                  + "tighter, so a long flick stays a series of ticks rather than a buzz.")
                 .font(.caption)

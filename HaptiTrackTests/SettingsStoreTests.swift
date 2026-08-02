@@ -24,7 +24,7 @@ final class SettingsStoreTests: XCTestCase {
         let settings = SettingsStore(defaults: defaults)
 
         XCTAssertTrue(settings.isScrollHapticsEnabled)
-        XCTAssertEqual(settings.stepSize, DetentConfiguration.default.stepSize)
+        XCTAssertEqual(settings.stepSize, TickConfiguration.default.stepSize)
         XCTAssertEqual(settings.intensity, .medium)
         XCTAssertFalse(settings.respondsToMouseWheel)
     }
@@ -48,8 +48,8 @@ final class SettingsStoreTests: XCTestCase {
         settings.stepSize = 1000
         XCTAssertEqual(settings.stepSize, SettingsStore.stepSizeRange.upperBound)
 
-        settings.maximumDetentRate = -5
-        XCTAssertEqual(settings.maximumDetentRate, SettingsStore.detentRateRange.lowerBound)
+        settings.maximumTickRate = -5
+        XCTAssertEqual(settings.maximumTickRate, SettingsStore.tickRateRange.lowerBound)
     }
 
     func testHandEditedDefaultsAreClampedOnLoad() {
@@ -71,12 +71,12 @@ final class SettingsStoreTests: XCTestCase {
     func testDetentConfigurationReflectsTheSettings() {
         let settings = SettingsStore(defaults: defaults)
         settings.stepSize = 20
-        settings.maximumDetentRate = 15
+        settings.maximumTickRate = 15
 
-        let configuration = settings.detentConfiguration
+        let configuration = settings.scrollTickConfiguration
 
         XCTAssertEqual(configuration.stepSize, 20)
-        XCTAssertEqual(configuration.maximumDetentRate, 15)
+        XCTAssertEqual(configuration.maximumTickRate, 15)
     }
 
     func testRestoreDefaults() {
@@ -88,7 +88,7 @@ final class SettingsStoreTests: XCTestCase {
         settings.resetToDefaults()
 
         XCTAssertTrue(settings.isScrollHapticsEnabled)
-        XCTAssertEqual(settings.stepSize, DetentConfiguration.default.stepSize)
+        XCTAssertEqual(settings.stepSize, TickConfiguration.default.stepSize)
         XCTAssertFalse(settings.respondsToMouseWheel)
     }
 

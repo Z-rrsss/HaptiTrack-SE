@@ -6,16 +6,16 @@ final class ScrollDetentEngineTests: XCTestCase {
     // MARK: - Accumulation
 
     func testShortScrollDoesNotFireADetent() {
-        let engine = ScrollDetentEngine()
+        let engine = TickAccumulator()
         let outcome = engine.consume(delta: 5, timestamp: 0, phase: .active)
         XCTAssertEqual(outcome.count, 0)
     }
 
     func testCrossingTheStepFiresOneDetent() {
-        var configuration = DetentConfiguration.default
+        var configuration = TickConfiguration.default
         configuration.stepSize = 12
 
-        let engine = ScrollDetentEngine(configuration: configuration)
+        let engine = TickAccumulator(configuration: configuration)
         let outcome = engine.consume(delta: 12, timestamp: 0, phase: .active)
 
         XCTAssertEqual(outcome.count, 1)
@@ -23,17 +23,17 @@ final class ScrollDetentEngineTests: XCTestCase {
     }
 
     func testDistanceAccumulatesAcrossEvents() {
-        let engine = ScrollDetentEngine(configuration: .default)
+        let engine = TickAccumulator(configuration: .default)
 
         XCTAssertEqual(engine.consume(delta: 6, timestamp: 0, phase: .active).count, 0)
         XCTAssertEqual(engine.consume(delta: 6, timestamp: 0.05, phase: .active).count, 1)
     }
 
     func testDirectionChangeRestartsTheCount() {
-        var configuration = DetentConfiguration.default
+        var configuration = TickConfiguration.default
         configuration.stepSize = 12
 
-        let engine = ScrollDetentEngine(configuration: configuration)
+        let engine = TickAccumulator(configuration: configuration)
         XCTAssertEqual(engine.consume(delta: 11, timestamp: 0, phase: .active).count, 0)
 
         // A full step in the opposite direction must earn its own detent
@@ -43,7 +43,7 @@ final class ScrollDetentEngineTests: XCTestCase {
     }
 
     func testAPauseDropsAccumulatedDistance() {
-        let engine = ScrollDetentEngine(configuration: .default)
+        let engine = TickAccumulator(configuration: .default)
         XCTAssertEqual(engine.consume(delta: 11, timestamp: 0, phase: .active).count, 0)
 
         let afterPause = engine.consume(delta: 11, timestamp: 5, phase: .active)
@@ -51,18 +51,18 @@ final class ScrollDetentEngineTests: XCTestCase {
     }
 
     func testEndOfGestureResetsTheEngine() {
-        let engine = ScrollDetentEngine(configuration: .default)
+        let engine = TickAccumulator(configuration: .default)
         XCTAssertEqual(engine.consume(delta: 11, timestamp: 0, phase: .active).count, 0)
         XCTAssertEqual(engine.consume(delta: 0, timestamp: 0.01, phase: .ended).count, 0)
         XCTAssertEqual(engine.consume(delta: 11, timestamp: 0.02, phase: .active).count, 0)
     }
 
     func testSingleEventNeverPaysOutMoreThanTheCap() {
-        var configuration = DetentConfiguration.default
+        var configuration = TickConfiguration.default
         configuration.stepSize = 10
-        configuration.maximumDetentsPerSample = 2
+        configuration.maximumTicksPerSample = 2
 
-        let engine = ScrollDetentEngine(configuration: configuration)
+        let engine = TickAccumulator(configuration: configuration)
         let outcome = engine.consume(delta: 500, timestamp: 0, phase: .active)
 
         XCTAssertEqual(outcome.count, 2)
@@ -72,9 +72,9 @@ final class ScrollDetentEngineTests: XCTestCase {
 
     func testSmallerStepProducesMoreDetentsOverTheSameDistance() {
         func detentCount(stepSize: Double) -> Int {
-            var configuration = DetentConfiguration.default
+            var configuration = TickConfiguration.default
             configuration.stepSize = stepSize
-            let engine = ScrollDetentEngine(configuration: configuration)
+            let engine = TickAccumulator(configuration: configuration)
 
             var total = 0
             // 2 points every 40 ms: slow enough that the rate limiters never
@@ -96,7 +96,7 @@ final class ScrollDetentEngineTests: XCTestCase {
 
     func testFastScrollingFiresFewerDetentsPerPointThanSlowScrolling() {
         func detentsPerPoint(deltaPerEvent: Double) -> Double {
-            let engine = ScrollDetentEngine(configuration: .default)
+            let engine = TickAccumulator(configuration: .default)
             var total = 0
             for index in 0..<200 {
                 total += engine.consume(
@@ -116,8 +116,8 @@ final class ScrollDetentEngineTests: XCTestCase {
     }
 
     func testDetentRateStaysBoundedDuringAFastFlick() {
-        let configuration = DetentConfiguration.default
-        let engine = ScrollDetentEngine(configuration: configuration)
+        let configuration = TickConfiguration.default
+        let engine = TickAccumulator(configuration: configuration)
 
         let eventCount = 200
         let interval = 0.016
@@ -135,12 +135,12 @@ final class ScrollDetentEngineTests: XCTestCase {
 
         // The smoothed velocity lags the start of the flick by a few events, so
         // allow modest headroom over the configured ceiling.
-        XCTAssertLessThan(rate, configuration.maximumDetentRate * 1.5)
+        XCTAssertLessThan(rate, configuration.maximumTickRate * 1.5)
     }
 
     func testFastScrollingUsesTheAttenuatedIntensity() {
-        let engine = ScrollDetentEngine(configuration: .default)
-        var lastFiring: DetentOutcome?
+        let engine = TickAccumulator(configuration: .default)
+        var lastFiring: TickOutcome?
 
         for index in 0..<20 {
             let outcome = engine.consume(
@@ -155,8 +155,8 @@ final class ScrollDetentEngineTests: XCTestCase {
     }
 
     func testSlowScrollingUsesTheFullIntensity() {
-        let engine = ScrollDetentEngine(configuration: .default)
-        var lastFiring: DetentOutcome?
+        let engine = TickAccumulator(configuration: .default)
+        var lastFiring: TickOutcome?
 
         for index in 0..<40 {
             let outcome = engine.consume(
@@ -173,16 +173,16 @@ final class ScrollDetentEngineTests: XCTestCase {
     // MARK: - Momentum
 
     func testMomentumWidensTheStepAndSoftensThePulse() {
-        var configuration = DetentConfiguration.default
+        var configuration = TickConfiguration.default
         configuration.stepSize = 12
-        configuration.momentumStepMultiplier = 2
-        configuration.maximumDetentsPerSample = 4
+        configuration.coastingStepMultiplier = 2
+        configuration.maximumTicksPerSample = 4
 
-        let active = ScrollDetentEngine(configuration: configuration)
-        let coasting = ScrollDetentEngine(configuration: configuration)
+        let active = TickAccumulator(configuration: configuration)
+        let coasting = TickAccumulator(configuration: configuration)
 
         let activeOutcome = active.consume(delta: 24, timestamp: 0, phase: .active)
-        let coastingOutcome = coasting.consume(delta: 24, timestamp: 0, phase: .momentum)
+        let coastingOutcome = coasting.consume(delta: 24, timestamp: 0, phase: .coasting)
 
         XCTAssertEqual(activeOutcome.count, 2)
         XCTAssertEqual(coastingOutcome.count, 1)
@@ -192,28 +192,28 @@ final class ScrollDetentEngineTests: XCTestCase {
     // MARK: - Rate limiting
 
     func testPulsesAreNeverCloserThanTheMinimumInterval() {
-        var configuration = DetentConfiguration.default
+        var configuration = TickConfiguration.default
         configuration.stepSize = 12
         // Freezing the velocity estimate isolates the interval limiter from the
         // step widening, which would otherwise absorb the second event.
         configuration.velocitySmoothing = 0
 
-        let engine = ScrollDetentEngine(configuration: configuration)
+        let engine = TickAccumulator(configuration: configuration)
         XCTAssertEqual(engine.consume(delta: 12, timestamp: 0, phase: .active).count, 1)
 
-        let tooSoon = configuration.minimumDetentInterval / 2
+        let tooSoon = configuration.minimumTickInterval / 2
         XCTAssertEqual(engine.consume(delta: 12, timestamp: tooSoon, phase: .active).count, 0)
 
-        let lateEnough = configuration.minimumDetentInterval * 1.5
+        let lateEnough = configuration.minimumTickInterval * 1.5
         XCTAssertEqual(engine.consume(delta: 1, timestamp: lateEnough, phase: .active).count, 1)
     }
 
     func testHeldBackDistanceDoesNotBecomeABacklog() {
-        var configuration = DetentConfiguration.default
+        var configuration = TickConfiguration.default
         configuration.stepSize = 12
         configuration.velocitySmoothing = 0
 
-        let engine = ScrollDetentEngine(configuration: configuration)
+        let engine = TickAccumulator(configuration: configuration)
         _ = engine.consume(delta: 12, timestamp: 0, phase: .active)
 
         // A burst of distance arriving while the limiter is closed must not be
@@ -224,7 +224,7 @@ final class ScrollDetentEngineTests: XCTestCase {
 
         let afterTheWait = engine.consume(
             delta: 1,
-            timestamp: configuration.minimumDetentInterval * 2,
+            timestamp: configuration.minimumTickInterval * 2,
             phase: .active
         )
         XCTAssertEqual(afterTheWait.count, 1)

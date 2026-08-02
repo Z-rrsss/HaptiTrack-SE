@@ -11,13 +11,13 @@ final class SettingsStore: ObservableObject {
     // Ranges the UI binds its sliders to, and which incoming values are clamped
     // to so a hand-edited defaults entry cannot produce a nonsensical feel.
     static let stepSizeRange: ClosedRange<Double> = 4...48
-    static let detentRateRange: ClosedRange<Double> = 8...40
+    static let tickRateRange: ClosedRange<Double> = 8...40
 
     private enum Key {
         static let isEnabled = "scrollHaptics.enabled"
         static let stepSize = "scrollHaptics.stepSize"
         static let intensity = "scrollHaptics.intensity"
-        static let maximumDetentRate = "scrollHaptics.maximumDetentRate"
+        static let maximumTickRate = "scrollHaptics.maximumTickRate"
         static let isMomentumEnabled = "scrollHaptics.momentumEnabled"
         static let respondsToMouseWheel = "scrollHaptics.respondsToMouseWheel"
     }
@@ -52,14 +52,14 @@ final class SettingsStore: ObservableObject {
     }
 
     /// Ceiling on pulses per second during fast scrolling.
-    @Published var maximumDetentRate: Double {
+    @Published var maximumTickRate: Double {
         didSet {
-            let clamped = maximumDetentRate.clamped(to: Self.detentRateRange)
-            guard clamped == maximumDetentRate else {
-                maximumDetentRate = clamped
+            let clamped = maximumTickRate.clamped(to: Self.tickRateRange)
+            guard clamped == maximumTickRate else {
+                maximumTickRate = clamped
                 return
             }
-            defaults.set(maximumDetentRate, forKey: Key.maximumDetentRate)
+            defaults.set(maximumTickRate, forKey: Key.maximumTickRate)
         }
     }
 
@@ -80,9 +80,9 @@ final class SettingsStore: ObservableObject {
         self.defaults = defaults
         defaults.register(defaults: [
             Key.isEnabled: true,
-            Key.stepSize: DetentConfiguration.default.stepSize,
+            Key.stepSize: TickConfiguration.default.stepSize,
             Key.intensity: HapticIntensity.medium.rawValue,
-            Key.maximumDetentRate: DetentConfiguration.default.maximumDetentRate,
+            Key.maximumTickRate: TickConfiguration.default.maximumTickRate,
             Key.isMomentumEnabled: true,
             Key.respondsToMouseWheel: false,
         ])
@@ -91,26 +91,26 @@ final class SettingsStore: ObservableObject {
         stepSize = defaults.double(forKey: Key.stepSize).clamped(to: Self.stepSizeRange)
         intensity = defaults.string(forKey: Key.intensity)
             .flatMap(HapticIntensity.init(rawValue:)) ?? .medium
-        maximumDetentRate = defaults.double(forKey: Key.maximumDetentRate)
-            .clamped(to: Self.detentRateRange)
+        maximumTickRate = defaults.double(forKey: Key.maximumTickRate)
+            .clamped(to: Self.tickRateRange)
         isMomentumHapticsEnabled = defaults.bool(forKey: Key.isMomentumEnabled)
         respondsToMouseWheel = defaults.bool(forKey: Key.respondsToMouseWheel)
     }
 
     /// The current preferences, expressed the way the detent engine wants them.
-    var detentConfiguration: DetentConfiguration {
-        var configuration = DetentConfiguration.default
+    var scrollTickConfiguration: TickConfiguration {
+        var configuration = TickConfiguration.default
         configuration.stepSize = stepSize
-        configuration.maximumDetentRate = maximumDetentRate
+        configuration.maximumTickRate = maximumTickRate
         return configuration
     }
 
     /// Restores the shipping defaults.
     func resetToDefaults() {
         isScrollHapticsEnabled = true
-        stepSize = DetentConfiguration.default.stepSize
+        stepSize = TickConfiguration.default.stepSize
         intensity = .medium
-        maximumDetentRate = DetentConfiguration.default.maximumDetentRate
+        maximumTickRate = TickConfiguration.default.maximumTickRate
         isMomentumHapticsEnabled = true
         respondsToMouseWheel = false
     }

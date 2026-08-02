@@ -19,11 +19,11 @@ import OSLog
 /// "all".
 final class ScrollEventTap {
 
-    /// One scroll event, reduced to what the detent logic needs.
+    /// One scroll event, reduced to what the tick logic needs.
     struct Sample: Equatable {
         /// Vertical scroll distance in points, signed by direction.
         var delta: Double
-        var phase: ScrollPhase
+        var phase: GesturePhase
         /// `true` for pixel-precise devices (trackpads, Magic Mouse), `false`
         /// for a classic notched mouse wheel.
         var isContinuous: Bool
@@ -141,10 +141,10 @@ final class ScrollEventTap {
         )
     }
 
-    private func phase(of event: CGEvent) -> ScrollPhase {
+    private func phase(of event: CGEvent) -> GesturePhase {
         let momentumRaw = UInt32(truncatingIfNeeded: event.getIntegerValueField(.scrollWheelEventMomentumPhase))
         if let momentum = CGMomentumScrollPhase(rawValue: momentumRaw), momentum != .none {
-            return momentum == .end ? .ended : .momentum
+            return momentum == .end ? .ended : .coasting
         }
 
         let scrollRaw = UInt32(truncatingIfNeeded: event.getIntegerValueField(.scrollWheelEventScrollPhase))
