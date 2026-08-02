@@ -16,7 +16,14 @@ final class ControlRegistry {
 
     private let controls: [ControlIdentifier: AdjustableControl]
 
-    init(controls: [AdjustableControl] = [VolumeControl(), BrightnessControl(), WhitePointControl()]) {
+    init(
+        controls: [AdjustableControl] = [
+            VolumeControl(),
+            BrightnessControl(),
+            WhitePointControl(),
+            KeyboardBacklightControl(),
+        ]
+    ) {
         self.controls = Dictionary(
             controls.map { ($0.identifier, $0) },
             uniquingKeysWith: { first, _ in first }
@@ -35,8 +42,18 @@ final class ControlRegistry {
         identifier == .none || control(for: identifier) != nil
     }
 
-    /// Everything the user may assign to an edge, `.none` first.
-    var assignableControls: [ControlIdentifier] {
-        ControlIdentifier.allCases
+    /// Everything the user may assign to an edge: `.none`, plus every control
+    /// this Mac actually has, in canonical order.
+    ///
+    /// - Parameter current: What the edge is set to now. It stays in the list
+    ///   even when this machine does not support it, so an assignment made on
+    ///   another Mac — or on this one with different hardware attached — shows
+    ///   what it is rather than appearing to have silently reassigned itself.
+    func assignableControls(including current: ControlIdentifier = .none) -> [ControlIdentifier] {
+        ControlIdentifier.allCases.filter { identifier in
+            identifier == .none
+                || identifier == current
+                || controls[identifier]?.isSupported == true
+        }
     }
 }

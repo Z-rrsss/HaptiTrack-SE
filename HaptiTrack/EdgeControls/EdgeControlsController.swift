@@ -128,6 +128,12 @@ final class EdgeControlsController: ObservableObject {
         registry.isAvailable(identifier)
     }
 
+    /// What the settings panel may offer for an edge currently set to
+    /// `current`, which is always included even if this Mac cannot drive it.
+    func assignableControls(including current: ControlIdentifier) -> [ControlIdentifier] {
+        registry.assignableControls(including: current)
+    }
+
     // MARK: - Preview
 
     /// Plays the tick pattern an edge would produce, without touching the

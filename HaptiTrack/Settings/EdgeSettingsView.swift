@@ -62,8 +62,13 @@ struct EdgeSettingsView: View {
         let zone = binding(for: edge)
 
         Section(edge.displayName + " edge") {
+            // Not every control exists on every Mac — a desktop has no
+            // keyboard backlight to offer — so the list comes from the
+            // registry rather than from the enum. Whatever the edge is set to
+            // now is always in it, so an assignment this machine cannot drive
+            // is shown rather than silently swapped for something else.
             Picker("Controls", selection: zone.control) {
-                ForEach(ControlIdentifier.allCases) { identifier in
+                ForEach(edgeControls.assignableControls(including: zone.wrappedValue.control)) { identifier in
                     Text(identifier.displayName).tag(identifier)
                 }
             }
@@ -73,9 +78,10 @@ struct EdgeSettingsView: View {
                     Label("This control isn't available right now.", systemImage: "exclamationmark.triangle")
                     // Availability is not a fixed property of the Mac: an
                     // external display used as the audio output often exposes
-                    // no volume at all, and brightness follows whichever
-                    // display is currently the main one.
-                    Text("Availability depends on the display and audio device in use. "
+                    // no volume at all, brightness follows whichever display is
+                    // currently the main one, and a keyboard with a backlight
+                    // can be swapped for one without.
+                    Text("Availability depends on the display, audio device and keyboard in use. "
                          + "Reopen this panel after switching devices.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
