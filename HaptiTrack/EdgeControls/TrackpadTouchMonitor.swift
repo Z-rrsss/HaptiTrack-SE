@@ -146,6 +146,10 @@ final class TrackpadTouchMonitor {
 
     var isRunning: Bool { !devices.isEmpty }
 
+    /// The size the device reported when it was started, or the fallback if it
+    /// has not been started or would not say.
+    var surfaceSize: TrackpadSurfaceSize { surface }
+
     /// - Parameter handler: Called on the main thread, once per frame.
     init(handler: @escaping (TrackpadTouchFrame) -> Void) {
         self.handler = handler

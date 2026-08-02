@@ -12,6 +12,11 @@ struct EdgeSettingsView: View {
     @ObservedObject var edgeControls: EdgeControlsController
 
     @State private var selectedEdge: TrackpadEdge = .right
+    @State private var hoveredEdge: TrackpadEdge?
+
+    private var highlight: EdgeHighlight {
+        EdgeHighlight(selected: selectedEdge, hovered: hoveredEdge)
+    }
 
     var body: some View {
         Form {
@@ -28,8 +33,22 @@ struct EdgeSettingsView: View {
                 }
                 .pickerStyle(.segmented)
                 .labelsHidden()
+
+                TrackpadDiagram(
+                    zones: settings.edgeZones,
+                    highlight: highlight,
+                    surface: edgeControls.surface,
+                    onHover: { hoveredEdge = $0 },
+                    onSelect: { selectedEdge = $0 }
+                )
+                .frame(maxWidth: 300)
+                .frame(maxWidth: .infinity, alignment: .center)
+                .padding(.vertical, 4)
             }
 
+            // The form follows the selection, not the hover: the pointer
+            // passing over the diagram should preview an edge, not rearrange
+            // the controls under the cursor.
             edgeSection(for: selectedEdge)
         }
         .formStyle(.grouped)

@@ -19,6 +19,12 @@ final class EdgeControlsController: ObservableObject {
 
     @Published private(set) var status: Status = .stopped
 
+    /// The trackpad's physical size, once one has been opened. The settings
+    /// panel draws its diagram from this, so the rectangle on screen has the
+    /// proportions of the trackpad in front of the user rather than of a
+    /// generic one.
+    @Published private(set) var surface: TrackpadSurfaceSize = .fallback
+
     private let settings: SettingsStore
     private let haptics: HapticEngine
     private let registry: ControlRegistry
@@ -89,6 +95,7 @@ final class EdgeControlsController: ObservableObject {
         do {
             try monitor.start()
             self.monitor = monitor
+            surface = monitor.surfaceSize
             engine.reset()
             haptics.prepare()
             stopPermissionPolling()

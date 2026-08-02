@@ -134,6 +134,16 @@ struct EdgeZoneConfiguration: Codable, Equatable, Identifiable {
         }
     }
 
+    /// How deep the strip is as a fraction of the surface dimension it eats
+    /// into: the vertical edges take a bite out of the width, the horizontal
+    /// ones out of the height. Used to draw the strip to scale in the settings
+    /// panel, where the trackpad is a rectangle of arbitrary size on screen.
+    func stripFraction(surface: TrackpadSurfaceSize) -> Double {
+        let dimension = edge.axis == .vertical ? surface.width : surface.height
+        guard dimension > 0 else { return 0 }
+        return (margin / dimension).clamped(to: 0...1)
+    }
+
     /// Signed distance travelled along this edge's axis, in millimetres.
     ///
     /// Positive means "more": up on a vertical edge, right on a horizontal one,
