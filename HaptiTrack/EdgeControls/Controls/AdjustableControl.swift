@@ -17,6 +17,7 @@ enum ControlIdentifier: String, CaseIterable, Identifiable, Codable {
     case nightShift = "whitePoint"
 
     case keyboardBacklight
+    case microphone
 
     var id: String { rawValue }
 
@@ -27,6 +28,7 @@ enum ControlIdentifier: String, CaseIterable, Identifiable, Codable {
         case .brightness: return "Brightness"
         case .nightShift: return "Night Shift"
         case .keyboardBacklight: return "Keyboard Backlight"
+        case .microphone: return "Microphone"
         }
     }
 }

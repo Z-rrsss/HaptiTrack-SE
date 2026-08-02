@@ -22,6 +22,7 @@ final class ControlRegistry {
             BrightnessControl(),
             NightShiftControl(),
             KeyboardBacklightControl(),
+            MicrophoneControl(),
         ]
     ) {
         self.controls = Dictionary(

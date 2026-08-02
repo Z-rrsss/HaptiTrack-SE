@@ -1,3 +1,4 @@
+import CoreAudio
 import XCTest
 @testable import HaptiTrack
 
@@ -123,6 +124,56 @@ final class ControlRegistryTests: XCTestCase {
 
     func testTheKeyboardBacklightMatchesTheKeyboardBrightnessKeys() {
         XCTAssertEqual(KeyboardBacklightControl().quantum, 1.0 / 16.0, accuracy: 0.0001)
+    }
+
+    // MARK: - The microphone
+
+    /// A machine with nothing to listen through: no built-in microphone, no
+    /// input device selected, or one whose gain is fixed in hardware.
+    private var noInputDevice: AudioDeviceVolume {
+        AudioDeviceVolume(scope: kAudioDevicePropertyScopeInput, device: { nil })
+    }
+
+    func testAMacWithNoMicrophoneOffersNoMicrophoneControl() {
+        let control = MicrophoneControl(volume: noInputDevice)
+
+        XCTAssertFalse(control.isSupported)
+        XCTAssertFalse(control.isAvailable)
+        XCTAssertFalse(ControlRegistry(controls: [control]).assignableControls().contains(.microphone))
+    }
+
+    func testAMissingMicrophoneReadsAsZeroRatherThanFailing() {
+        let control = MicrophoneControl(volume: noInputDevice)
+
+        XCTAssertEqual(control.value, 0)
+
+        // And writing to it is a no-op rather than a crash: an edge assigned to
+        // a microphone that went away mid-gesture must not take the app down.
+        control.value = 0.5
+        XCTAssertEqual(control.value, 0)
+    }
+
+    func testAMissingMicrophoneIsNotHandedToTheGestureEngine() {
+        let registry = ControlRegistry(controls: [MicrophoneControl(volume: noInputDevice)])
+
+        XCTAssertNil(registry.control(for: .microphone))
+        XCTAssertFalse(registry.isAvailable(.microphone))
+    }
+
+    func testTheMicrophoneStaysListedWhileAnEdgeIsSetToIt() {
+        let registry = ControlRegistry(controls: [MicrophoneControl(volume: noInputDevice)])
+
+        XCTAssertTrue(registry.assignableControls(including: .microphone).contains(.microphone))
+    }
+
+    func testTheRealMicrophoneAgreesWithItself() {
+        let control = MicrophoneControl()
+
+        // Reads only: a test that turned down the gain of whoever ran it would
+        // be a rude test.
+        XCTAssertEqual(control.identifier, .microphone)
+        XCTAssertEqual(control.isSupported, control.isAvailable)
+        XCTAssertTrue((0...1).contains(control.value))
     }
 
     // MARK: - The real Night Shift

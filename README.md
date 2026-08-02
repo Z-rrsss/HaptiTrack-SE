@@ -25,7 +25,7 @@ It is written from scratch and shares no code or assets with any other app.
 1. **Scroll haptics** — a configurable haptic pulse per scroll detent, with
    sensitivity control and speed adaptation. *(done)*
 2. **Edge controls** — slide along an edge of the trackpad to drive volume,
-   brightness, the keyboard backlight or Night Shift, with a
+   brightness, the keyboard backlight, the microphone gain or Night Shift, with a
    haptic tick per step. Each of the four edges is configured separately, and
    the settings panel draws the trackpad to scale with the edge being
    configured lit up. *(done)*
