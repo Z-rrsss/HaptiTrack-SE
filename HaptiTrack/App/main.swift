@@ -7,7 +7,11 @@ import AppKit
 // activation policy is set before the app finishes launching, which avoids a
 // brief Dock icon flash on some macOS releases.
 let application = NSApplication.shared
-let delegate = AppDelegate()
+
+// Top-level code is not main-actor isolated, but it does run on the main
+// thread before anything else exists, so the assertion here is a formality.
+// The delegate has to be held in a global: `NSApplication.delegate` is weak.
+let delegate = MainActor.assumeIsolated { AppDelegate() }
 
 application.delegate = delegate
 application.setActivationPolicy(.accessory)

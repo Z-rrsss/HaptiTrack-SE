@@ -1,43 +1,132 @@
 import AppKit
+import Combine
 
 /// Creates and manages the menu bar item and its menu.
+///
+/// The menu is rebuilt every time it is about to open rather than mutated in
+/// place, so it can never drift out of sync with the settings or the engine's
+/// status.
+@MainActor
 final class StatusItemController: NSObject {
 
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+    private let settings: SettingsStore
+    private let scrollHaptics: ScrollHapticsController
+    private let openSettings: () -> Void
+    private var cancellables: Set<AnyCancellable> = []
 
-    override init() {
+    init(
+        settings: SettingsStore,
+        scrollHaptics: ScrollHapticsController,
+        openSettings: @escaping () -> Void
+    ) {
+        self.settings = settings
+        self.scrollHaptics = scrollHaptics
+        self.openSettings = openSettings
         super.init()
-        configureButton()
-        statusItem.menu = makeMenu()
-    }
 
-    private func configureButton() {
-        guard let button = statusItem.button else { return }
-        button.image = NSImage(
-            systemSymbolName: "hand.tap",
-            accessibilityDescription: "HaptiTrack"
-        )
-        button.image?.isTemplate = true
-        button.toolTip = "HaptiTrack"
-    }
-
-    private func makeMenu() -> NSMenu {
         let menu = NSMenu()
-        menu.addItem(withTitle: "HaptiTrack", action: nil, keyEquivalent: "").isEnabled = false
-        menu.addItem(.separator())
+        menu.delegate = self
+        statusItem.menu = menu
 
-        let quitItem = NSMenuItem(
-            title: "Quit HaptiTrack",
-            action: #selector(quit),
-            keyEquivalent: "q"
+        updateButton()
+        scrollHaptics.$status
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in self?.updateButton() }
+            .store(in: &cancellables)
+    }
+
+    // MARK: - Button
+
+    private func updateButton() {
+        guard let button = statusItem.button else { return }
+
+        // Filled while ticking, outlined while off: readable at a glance in
+        // both light and dark menu bars without needing colour.
+        let symbol = scrollHaptics.status.isRunning ? "hand.tap.fill" : "hand.tap"
+        let image = NSImage(systemSymbolName: symbol, accessibilityDescription: AppInfo.name)
+        image?.isTemplate = true
+        button.image = image
+        button.toolTip = tooltip
+    }
+
+    private var tooltip: String {
+        switch scrollHaptics.status {
+        case .running: return "\(AppInfo.name) — scroll haptics on"
+        case .stopped: return "\(AppInfo.name) — scroll haptics off"
+        case .waitingForPermission: return "\(AppInfo.name) — Accessibility permission required"
+        case .failed(let message): return "\(AppInfo.name) — \(message)"
+        }
+    }
+
+    // MARK: - Menu
+
+    private func rebuild(_ menu: NSMenu) {
+        menu.removeAllItems()
+
+        let toggle = item(
+            title: "Scroll Haptics",
+            action: #selector(toggleScrollHaptics),
+            keyEquivalent: ""
         )
-        quitItem.target = self
-        menu.addItem(quitItem)
+        toggle.state = settings.isScrollHapticsEnabled ? .on : .off
+        menu.addItem(toggle)
 
-        return menu
+        if case .waitingForPermission = scrollHaptics.status {
+            let permission = item(
+                title: "Grant Accessibility Permission…",
+                action: #selector(requestPermission),
+                keyEquivalent: ""
+            )
+            menu.addItem(permission)
+        }
+
+        if case .failed(let message) = scrollHaptics.status {
+            let failure = NSMenuItem(title: message, action: nil, keyEquivalent: "")
+            failure.isEnabled = false
+            menu.addItem(failure)
+        }
+
+        menu.addItem(.separator())
+        menu.addItem(item(title: "Settings…", action: #selector(showSettings), keyEquivalent: ","))
+        menu.addItem(.separator())
+        menu.addItem(item(title: "Quit \(AppInfo.name)", action: #selector(quit), keyEquivalent: "q"))
+    }
+
+    private func item(title: String, action: Selector, keyEquivalent: String) -> NSMenuItem {
+        let item = NSMenuItem(title: title, action: action, keyEquivalent: keyEquivalent)
+        item.target = self
+        return item
+    }
+
+    // MARK: - Actions
+
+    @objc private func toggleScrollHaptics() {
+        settings.isScrollHapticsEnabled.toggle()
+
+        // Turning the module on for the first time is the natural moment to ask
+        // for the permission it needs.
+        if settings.isScrollHapticsEnabled, !AccessibilityAuthorization.isTrusted {
+            AccessibilityAuthorization.requestIfNeeded()
+        }
+    }
+
+    @objc private func requestPermission() {
+        AccessibilityAuthorization.requestIfNeeded()
+        AccessibilityAuthorization.openSystemSettings()
+    }
+
+    @objc private func showSettings() {
+        openSettings()
     }
 
     @objc private func quit() {
         NSApp.terminate(nil)
+    }
+}
+
+extension StatusItemController: NSMenuDelegate {
+    func menuNeedsUpdate(_ menu: NSMenu) {
+        rebuild(menu)
     }
 }
