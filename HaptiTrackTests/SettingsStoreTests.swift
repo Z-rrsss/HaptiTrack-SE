@@ -92,6 +92,85 @@ final class SettingsStoreTests: XCTestCase {
         XCTAssertFalse(settings.respondsToMouseWheel)
     }
 
+    // MARK: - Edge controls
+
+    func testEdgeZonesStartAtTheDefaults() {
+        let settings = SettingsStore(defaults: defaults)
+
+        XCTAssertTrue(settings.areEdgeControlsEnabled)
+        XCTAssertEqual(settings.edgeZones, EdgeZoneConfiguration.defaults())
+    }
+
+    func testEdgeZoneChangesSurviveARestart() {
+        let settings = SettingsStore(defaults: defaults)
+        var zone = settings.zone(for: .top)
+        zone.control = .whitePoint
+        zone.margin = 18
+        zone.isInverted = true
+        settings.updateZone(zone)
+
+        let reloaded = SettingsStore(defaults: defaults)
+        let restored = reloaded.zone(for: .top)
+
+        XCTAssertEqual(restored.control, .whitePoint)
+        XCTAssertEqual(restored.margin, 18)
+        XCTAssertTrue(restored.isInverted)
+    }
+
+    func testUpdatingOneEdgeLeavesTheOthersAlone() {
+        let settings = SettingsStore(defaults: defaults)
+        var zone = settings.zone(for: .right)
+        zone.control = .none
+        settings.updateZone(zone)
+
+        XCTAssertEqual(settings.zone(for: .right).control, ControlIdentifier.none)
+        XCTAssertEqual(settings.zone(for: .left).control, .brightness)
+        XCTAssertEqual(settings.edgeZones.count, TrackpadEdge.allCases.count)
+    }
+
+    func testAPartiallyStoredEdgeListIsCompleted() {
+        // Only one edge on disk, as if written by an older version.
+        let stored = [EdgeZoneConfiguration(edge: .bottom, control: .volume, margin: 12)]
+        defaults.set(try! JSONEncoder().encode(stored), forKey: "edgeControls.zones")
+
+        let settings = SettingsStore(defaults: defaults)
+
+        XCTAssertEqual(settings.edgeZones.count, TrackpadEdge.allCases.count)
+        XCTAssertEqual(settings.edgeZones.map(\.edge), TrackpadEdge.allCases.map { $0 })
+        XCTAssertEqual(settings.zone(for: .bottom).margin, 12)
+        XCTAssertEqual(settings.zone(for: .right).control, .volume)
+    }
+
+    func testCorruptEdgeDataFallsBackToDefaults() {
+        defaults.set(Data("not json".utf8), forKey: "edgeControls.zones")
+
+        let settings = SettingsStore(defaults: defaults)
+
+        XCTAssertEqual(settings.edgeZones, EdgeZoneConfiguration.defaults())
+    }
+
+    func testStoredEdgeValuesAreClampedOnLoad() {
+        let stored = [EdgeZoneConfiguration(edge: .right, control: .volume, margin: 9_999, travelForFullRange: -5)]
+        defaults.set(try! JSONEncoder().encode(stored), forKey: "edgeControls.zones")
+
+        let settings = SettingsStore(defaults: defaults)
+        let zone = settings.zone(for: .right)
+
+        XCTAssertEqual(zone.margin, EdgeZoneConfiguration.marginRange.upperBound)
+        XCTAssertEqual(zone.travelForFullRange, EdgeZoneConfiguration.travelRange.lowerBound)
+    }
+
+    func testRestoreDefaultsAlsoResetsEdges() {
+        let settings = SettingsStore(defaults: defaults)
+        var zone = settings.zone(for: .right)
+        zone.control = .none
+        settings.updateZone(zone)
+
+        settings.resetToDefaults()
+
+        XCTAssertEqual(settings.edgeZones, EdgeZoneConfiguration.defaults())
+    }
+
     func testAttenuationIsOneStepSofter() {
         XCTAssertEqual(HapticIntensity.strong.attenuated, .medium)
         XCTAssertEqual(HapticIntensity.medium.attenuated, .light)

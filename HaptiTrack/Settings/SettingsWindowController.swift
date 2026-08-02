@@ -11,11 +11,17 @@ final class SettingsWindowController {
 
     private let settings: SettingsStore
     private let scrollHaptics: ScrollHapticsController
+    private let edgeControls: EdgeControlsController
     private var window: NSWindow?
 
-    init(settings: SettingsStore, scrollHaptics: ScrollHapticsController) {
+    init(
+        settings: SettingsStore,
+        scrollHaptics: ScrollHapticsController,
+        edgeControls: EdgeControlsController
+    ) {
         self.settings = settings
         self.scrollHaptics = scrollHaptics
+        self.edgeControls = edgeControls
     }
 
     func show() {
@@ -30,7 +36,11 @@ final class SettingsWindowController {
 
     private func makeWindow() -> NSWindow {
         let controller = NSHostingController(
-            rootView: SettingsView(settings: settings, scrollHaptics: scrollHaptics)
+            rootView: SettingsView(
+                settings: settings,
+                scrollHaptics: scrollHaptics,
+                edgeControls: edgeControls
+            )
         )
         let window = NSWindow(contentViewController: controller)
         window.title = "\(AppInfo.name) Settings"

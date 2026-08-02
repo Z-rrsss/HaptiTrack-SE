@@ -1,8 +1,30 @@
 import SwiftUI
 
-/// The settings panel. Deliberately one screen with no tabs: module 1 has a
-/// handful of knobs and hiding them behind navigation would only add clicks.
+/// The settings window.
+///
+/// One tab per module. Module 1 fitted on a single screen; module 2 has four
+/// independently configurable edges, and putting eleven more controls under the
+/// scroll settings would have turned a short panel into a scrolling one.
 struct SettingsView: View {
+
+    @ObservedObject var settings: SettingsStore
+    @ObservedObject var scrollHaptics: ScrollHapticsController
+    @ObservedObject var edgeControls: EdgeControlsController
+
+    var body: some View {
+        TabView {
+            ScrollSettingsView(settings: settings, scrollHaptics: scrollHaptics)
+                .tabItem { Label("Scrolling", systemImage: "hand.tap") }
+
+            EdgeSettingsView(settings: settings, edgeControls: edgeControls)
+                .tabItem { Label("Edges", systemImage: "rectangle.inset.filled") }
+        }
+        .frame(width: 460)
+    }
+}
+
+/// Module 1: haptic feedback for trackpad scrolling.
+struct ScrollSettingsView: View {
 
     @ObservedObject var settings: SettingsStore
     @ObservedObject var scrollHaptics: ScrollHapticsController
@@ -46,7 +68,6 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 420)
         .fixedSize(horizontal: false, vertical: true)
     }
 
@@ -64,17 +85,12 @@ struct SettingsView: View {
                 .foregroundStyle(.secondary)
 
         case .waitingForPermission:
-            VStack(alignment: .leading, spacing: 8) {
-                Label("Accessibility permission required", systemImage: "exclamationmark.triangle.fill")
-                Text("HaptiTrack watches scroll events to know when to fire a pulse. "
-                     + "It never modifies or records them.")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                Button("Open System Settings…") {
-                    AccessibilityAuthorization.openSystemSettings()
-                }
-            }
+            PermissionNotice(
+                title: "Accessibility permission required",
+                explanation: "HaptiTrack watches scroll events to know when to fire a pulse. "
+                    + "It never modifies or records them.",
+                action: AccessibilityAuthorization.openSystemSettings
+            )
 
         case .failed(let message):
             Label(message, systemImage: "xmark.octagon.fill")
@@ -120,6 +136,24 @@ struct SettingsView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+}
+
+/// A missing-permission row: what is needed, why, and a way to go and grant it.
+struct PermissionNotice: View {
+    let title: String
+    let explanation: String
+    let action: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label(title, systemImage: "exclamationmark.triangle.fill")
+            Text(explanation)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            Button("Open System Settings…", action: action)
         }
     }
 }

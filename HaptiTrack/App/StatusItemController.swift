@@ -12,16 +12,19 @@ final class StatusItemController: NSObject {
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
     private let settings: SettingsStore
     private let scrollHaptics: ScrollHapticsController
+    private let edgeControls: EdgeControlsController
     private let openSettings: () -> Void
     private var cancellables: Set<AnyCancellable> = []
 
     init(
         settings: SettingsStore,
         scrollHaptics: ScrollHapticsController,
+        edgeControls: EdgeControlsController,
         openSettings: @escaping () -> Void
     ) {
         self.settings = settings
         self.scrollHaptics = scrollHaptics
+        self.edgeControls = edgeControls
         self.openSettings = openSettings
         super.init()
 
@@ -72,6 +75,22 @@ final class StatusItemController: NSObject {
         toggle.state = settings.isScrollHapticsEnabled ? .on : .off
         menu.addItem(toggle)
 
+        let edges = item(
+            title: "Edge Controls",
+            action: #selector(toggleEdgeControls),
+            keyEquivalent: ""
+        )
+        edges.state = settings.areEdgeControlsEnabled ? .on : .off
+        menu.addItem(edges)
+
+        if case .waitingForPermission = edgeControls.status {
+            menu.addItem(item(
+                title: "Grant Input Monitoring Permission…",
+                action: #selector(requestInputMonitoring),
+                keyEquivalent: ""
+            ))
+        }
+
         if case .waitingForPermission = scrollHaptics.status {
             let permission = item(
                 title: "Grant Accessibility Permission…",
@@ -109,6 +128,19 @@ final class StatusItemController: NSObject {
         if settings.isScrollHapticsEnabled, !AccessibilityAuthorization.isTrusted {
             AccessibilityAuthorization.requestIfNeeded()
         }
+    }
+
+    @objc private func toggleEdgeControls() {
+        settings.areEdgeControlsEnabled.toggle()
+
+        if settings.areEdgeControlsEnabled, !InputMonitoringAuthorization.isPermitted {
+            InputMonitoringAuthorization.request()
+        }
+    }
+
+    @objc private func requestInputMonitoring() {
+        InputMonitoringAuthorization.request()
+        InputMonitoringAuthorization.openSystemSettings()
     }
 
     @objc private func requestPermission() {

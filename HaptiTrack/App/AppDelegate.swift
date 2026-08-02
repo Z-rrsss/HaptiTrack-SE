@@ -6,6 +6,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private let settings = SettingsStore.shared
     private var scrollHaptics: ScrollHapticsController?
+    private var edgeControls: EdgeControlsController?
     private var statusItemController: StatusItemController?
     private var settingsWindowController: SettingsWindowController?
 
@@ -17,17 +18,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard !isRunningUnitTests else { return }
 
         let scrollHaptics = ScrollHapticsController(settings: settings)
+        let edgeControls = EdgeControlsController(settings: settings)
         let settingsWindowController = SettingsWindowController(
             settings: settings,
-            scrollHaptics: scrollHaptics
+            scrollHaptics: scrollHaptics,
+            edgeControls: edgeControls
         )
 
         statusItemController = StatusItemController(
             settings: settings,
             scrollHaptics: scrollHaptics,
+            edgeControls: edgeControls,
             openSettings: { settingsWindowController.show() }
         )
         self.scrollHaptics = scrollHaptics
+        self.edgeControls = edgeControls
         self.settingsWindowController = settingsWindowController
 
         // Asking on first launch explains the permission in context, next to
@@ -38,10 +43,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         scrollHaptics.applySettings()
+        edgeControls.applySettings()
     }
 
     func applicationWillTerminate(_ notification: Notification) {
         scrollHaptics?.stop()
+        edgeControls?.stop()
     }
 
     func applicationSupportsSecureRestorableState(_ app: NSApplication) -> Bool {

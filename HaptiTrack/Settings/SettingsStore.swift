@@ -20,6 +20,8 @@ final class SettingsStore: ObservableObject {
         static let maximumTickRate = "scrollHaptics.maximumTickRate"
         static let isMomentumEnabled = "scrollHaptics.momentumEnabled"
         static let respondsToMouseWheel = "scrollHaptics.respondsToMouseWheel"
+        static let areEdgeControlsEnabled = "edgeControls.enabled"
+        static let edgeZones = "edgeControls.zones"
     }
 
     private let defaults: UserDefaults
@@ -76,6 +78,22 @@ final class SettingsStore: ObservableObject {
         didSet { defaults.set(respondsToMouseWheel, forKey: Key.respondsToMouseWheel) }
     }
 
+    /// Master switch for the edge control module.
+    @Published var areEdgeControlsEnabled: Bool {
+        didSet { defaults.set(areEdgeControlsEnabled, forKey: Key.areEdgeControlsEnabled) }
+    }
+
+    /// One entry per edge, always all four and always in `TrackpadEdge.allCases`
+    /// order. Stored as JSON rather than as a flat pile of keys so that adding
+    /// a knob to `EdgeZoneConfiguration` does not mean inventing four more
+    /// `UserDefaults` keys and a migration.
+    @Published var edgeZones: [EdgeZoneConfiguration] {
+        didSet {
+            guard let data = try? JSONEncoder().encode(edgeZones) else { return }
+            defaults.set(data, forKey: Key.edgeZones)
+        }
+    }
+
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         defaults.register(defaults: [
@@ -85,6 +103,7 @@ final class SettingsStore: ObservableObject {
             Key.maximumTickRate: TickConfiguration.default.maximumTickRate,
             Key.isMomentumEnabled: true,
             Key.respondsToMouseWheel: false,
+            Key.areEdgeControlsEnabled: true,
         ])
 
         isScrollHapticsEnabled = defaults.bool(forKey: Key.isEnabled)
@@ -95,9 +114,46 @@ final class SettingsStore: ObservableObject {
             .clamped(to: Self.tickRateRange)
         isMomentumHapticsEnabled = defaults.bool(forKey: Key.isMomentumEnabled)
         respondsToMouseWheel = defaults.bool(forKey: Key.respondsToMouseWheel)
+        areEdgeControlsEnabled = defaults.bool(forKey: Key.areEdgeControlsEnabled)
+        edgeZones = Self.decodeZones(from: defaults.data(forKey: Key.edgeZones))
     }
 
-    /// The current preferences, expressed the way the detent engine wants them.
+    /// Reads the stored zones back, repairing anything unexpected.
+    ///
+    /// The engine indexes edges by identity rather than by position, so a
+    /// stored list that is short, reordered, or missing an edge added in a
+    /// later version has to come back complete: stored entries win, defaults
+    /// fill the gaps, and the order is always canonical.
+    private static func decodeZones(from data: Data?) -> [EdgeZoneConfiguration] {
+        let stored = data
+            .flatMap { try? JSONDecoder().decode([EdgeZoneConfiguration].self, from: $0) } ?? []
+        let byEdge = Dictionary(stored.map { ($0.edge, $0) }, uniquingKeysWith: { first, _ in first })
+
+        return EdgeZoneConfiguration.defaults().map { fallback in
+            guard var zone = byEdge[fallback.edge] else { return fallback }
+            zone.margin = zone.margin.clamped(to: EdgeZoneConfiguration.marginRange)
+            zone.travelForFullRange = zone.travelForFullRange
+                .clamped(to: EdgeZoneConfiguration.travelRange)
+            return zone
+        }
+    }
+
+    /// The configuration for one edge.
+    func zone(for edge: TrackpadEdge) -> EdgeZoneConfiguration {
+        edgeZones.first { $0.edge == edge } ?? EdgeZoneConfiguration(edge: edge)
+    }
+
+    /// Replaces one edge's configuration, leaving the other three alone.
+    func updateZone(_ zone: EdgeZoneConfiguration) {
+        guard let index = edgeZones.firstIndex(where: { $0.edge == zone.edge }) else {
+            edgeZones.append(zone)
+            return
+        }
+        guard edgeZones[index] != zone else { return }
+        edgeZones[index] = zone
+    }
+
+    /// The current preferences, expressed the way the tick accumulator wants them.
     var scrollTickConfiguration: TickConfiguration {
         var configuration = TickConfiguration.default
         configuration.stepSize = stepSize
@@ -113,6 +169,8 @@ final class SettingsStore: ObservableObject {
         maximumTickRate = TickConfiguration.default.maximumTickRate
         isMomentumHapticsEnabled = true
         respondsToMouseWheel = false
+        areEdgeControlsEnabled = true
+        edgeZones = EdgeZoneConfiguration.defaults()
     }
 }
 
