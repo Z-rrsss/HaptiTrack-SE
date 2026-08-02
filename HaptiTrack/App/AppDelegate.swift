@@ -9,6 +9,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var edgeControls: EdgeControlsController?
     private var statusItemController: StatusItemController?
     private var settingsWindowController: SettingsWindowController?
+    private let launchAnimation = LaunchAnimationController()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // The unit test bundle uses the app as its test host, so `main.swift`
@@ -35,6 +36,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self.edgeControls = edgeControls
         self.settingsWindowController = settingsWindowController
 
+        // The menu bar item is up by now, so the app is already usable. The
+        // intro is deliberately in front of the rest of the sequence rather
+        // than alongside it: it covers the whole screen, and a permission alert
+        // put up behind it would spend two seconds hidden under a vignette.
+        launchAnimation.play { [weak self] in
+            self?.startModules()
+        }
+    }
+
+    /// Everything that needs a permission, and the modules that ask for them.
+    private func startModules() {
         // Asking on first launch explains the permission in context, next to
         // the reason the app was just installed. On later launches the system
         // alert is suppressed and this is a no-op.
@@ -42,11 +54,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             AccessibilityAuthorization.requestIfNeeded()
         }
 
-        scrollHaptics.applySettings()
-        edgeControls.applySettings()
+        scrollHaptics?.applySettings()
+        edgeControls?.applySettings()
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        launchAnimation.cancel()
         scrollHaptics?.stop()
         edgeControls?.stop()
     }
