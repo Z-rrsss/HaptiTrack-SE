@@ -12,11 +12,6 @@ struct EdgeSettingsView: View {
     @ObservedObject var edgeControls: EdgeControlsController
 
     @State private var selectedEdge: TrackpadEdge = .right
-    @State private var hoveredEdge: TrackpadEdge?
-
-    private var highlight: EdgeHighlight {
-        EdgeHighlight(selected: selectedEdge, hovered: hoveredEdge)
-    }
 
     var body: some View {
         Form {
@@ -34,11 +29,13 @@ struct EdgeSettingsView: View {
                 .pickerStyle(.segmented)
                 .labelsHidden()
 
+                // Two ways of saying the same thing: the picker names the
+                // edges, the diagram points at them. Both drive the one piece
+                // of state, so the lit strip is always the section below.
                 TrackpadDiagram(
                     zones: settings.edgeZones,
-                    highlight: highlight,
+                    selectedEdge: selectedEdge,
                     surface: edgeControls.surface,
-                    onHover: { hoveredEdge = $0 },
                     onSelect: { selectedEdge = $0 }
                 )
                 .frame(maxWidth: 300)
@@ -46,9 +43,6 @@ struct EdgeSettingsView: View {
                 .padding(.vertical, 4)
             }
 
-            // The form follows the selection, not the hover: the pointer
-            // passing over the diagram should preview an edge, not rearrange
-            // the controls under the cursor.
             edgeSection(for: selectedEdge)
         }
         .formStyle(.grouped)
