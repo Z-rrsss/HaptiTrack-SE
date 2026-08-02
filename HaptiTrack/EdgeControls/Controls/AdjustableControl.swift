@@ -9,7 +9,13 @@ enum ControlIdentifier: String, CaseIterable, Identifiable, Codable {
     case none
     case volume
     case brightness
-    case whitePoint
+
+    /// Shipped as "White Point" before it was named after the thing it
+    /// actually drives. The raw value is what is already sitting in the
+    /// `UserDefaults` of every install, so it keeps the old spelling: renaming
+    /// it would quietly unassign the edge instead of renaming a label.
+    case nightShift = "whitePoint"
+
     case keyboardBacklight
 
     var id: String { rawValue }
@@ -19,7 +25,7 @@ enum ControlIdentifier: String, CaseIterable, Identifiable, Codable {
         case .none: return "None"
         case .volume: return "Volume"
         case .brightness: return "Brightness"
-        case .whitePoint: return "White Point"
+        case .nightShift: return "Night Shift"
         case .keyboardBacklight: return "Keyboard Backlight"
         }
     }

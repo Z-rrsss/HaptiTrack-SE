@@ -104,7 +104,7 @@ final class SettingsStoreTests: XCTestCase {
     func testEdgeZoneChangesSurviveARestart() {
         let settings = SettingsStore(defaults: defaults)
         var zone = settings.zone(for: .top)
-        zone.control = .whitePoint
+        zone.control = .nightShift
         zone.margin = 18
         zone.isInverted = true
         settings.updateZone(zone)
@@ -112,9 +112,34 @@ final class SettingsStoreTests: XCTestCase {
         let reloaded = SettingsStore(defaults: defaults)
         let restored = reloaded.zone(for: .top)
 
-        XCTAssertEqual(restored.control, .whitePoint)
+        XCTAssertEqual(restored.control, .nightShift)
         XCTAssertEqual(restored.margin, 18)
         XCTAssertTrue(restored.isInverted)
+    }
+
+    /// Renaming a control renames a label, not an assignment. These are the
+    /// strings sitting in the `UserDefaults` of every install; changing one
+    /// would silently unassign whichever edge was set to it.
+    func testStoredControlNamesNeverChange() {
+        XCTAssertEqual(ControlIdentifier.none.rawValue, "none")
+        XCTAssertEqual(ControlIdentifier.volume.rawValue, "volume")
+        XCTAssertEqual(ControlIdentifier.brightness.rawValue, "brightness")
+        XCTAssertEqual(ControlIdentifier.nightShift.rawValue, "whitePoint")
+        XCTAssertEqual(ControlIdentifier.keyboardBacklight.rawValue, "keyboardBacklight")
+    }
+
+    func testAnEdgeSetToTheOldWhitePointNameStillComesBack() {
+        // What an install from before the rename has on disk.
+        let stored = """
+            [{"edge":"top","control":"whitePoint","margin":12,\
+            "travelForFullRange":70,"tickDensity":"fullStep","isInverted":false}]
+            """
+        defaults.set(Data(stored.utf8), forKey: "edgeControls.zones")
+
+        let settings = SettingsStore(defaults: defaults)
+
+        XCTAssertEqual(settings.zone(for: .top).control, .nightShift)
+        XCTAssertEqual(settings.zone(for: .top).margin, 12)
     }
 
     func testUpdatingOneEdgeLeavesTheOthersAlone() {

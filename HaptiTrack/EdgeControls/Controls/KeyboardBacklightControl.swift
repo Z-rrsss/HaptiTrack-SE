@@ -6,8 +6,8 @@ import OSLog
 /// ⚠️ **Private API.** macOS exposes no public way to read or set the keyboard
 /// backlight. The F5/F6 keys and the Keyboard pane in System Settings both go
 /// through `KeyboardBrightnessClient`, a private Objective-C class in
-/// `CoreBrightness.framework` — the same framework `WhitePointControl` already
-/// uses for Night Shift — and so does this.
+/// `CoreBrightness.framework` — the same framework `NightShiftControl` already
+/// uses — and so does this.
 ///
 /// The alternative would be writing HID reports to the backlight element on the
 /// keyboard's IOHIDDevice. That is no more supported and considerably more

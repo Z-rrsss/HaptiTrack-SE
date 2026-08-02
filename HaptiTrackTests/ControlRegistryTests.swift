@@ -124,4 +124,17 @@ final class ControlRegistryTests: XCTestCase {
     func testTheKeyboardBacklightMatchesTheKeyboardBrightnessKeys() {
         XCTAssertEqual(KeyboardBacklightControl().quantum, 1.0 / 16.0, accuracy: 0.0001)
     }
+
+    // MARK: - The real Night Shift
+
+    func testNightShiftAgreesWithItself() {
+        let control = NightShiftControl()
+
+        // Reads only: a test that tinted the screen of whoever ran it would be
+        // a rude test.
+        XCTAssertEqual(control.identifier, .nightShift)
+        XCTAssertEqual(control.displayName, "Night Shift")
+        XCTAssertEqual(control.isSupported, control.isAvailable)
+        XCTAssertTrue((0...1).contains(control.value))
+    }
 }

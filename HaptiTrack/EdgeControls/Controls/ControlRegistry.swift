@@ -3,7 +3,7 @@ import Foundation
 /// The set of controls an edge can be assigned to.
 ///
 /// Instances are created once and shared: `BrightnessControl` and
-/// `WhitePointControl` each open a private framework or an Objective-C class on
+/// `NightShiftControl` each open a private framework or an Objective-C class on
 /// init, and there is no reason to pay for that per gesture.
 ///
 /// Registering a new control is a two-line change here plus a case in
@@ -20,7 +20,7 @@ final class ControlRegistry {
         controls: [AdjustableControl] = [
             VolumeControl(),
             BrightnessControl(),
-            WhitePointControl(),
+            NightShiftControl(),
             KeyboardBacklightControl(),
         ]
     ) {
