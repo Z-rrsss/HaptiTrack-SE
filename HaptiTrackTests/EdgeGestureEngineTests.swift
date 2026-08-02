@@ -39,12 +39,14 @@ final class EdgeGestureEngineTests: XCTestCase {
     private var control: MockControl!
     private var tickCount = 0
     private var tickIntensities: [HapticIntensity] = []
+    private var adjustments: [ControlAdjustment] = []
 
     override func setUp() {
         super.setUp()
         control = MockControl()
         tickCount = 0
         tickIntensities = []
+        adjustments = []
     }
 
     // MARK: - Helpers
@@ -62,6 +64,9 @@ final class EdgeGestureEngineTests: XCTestCase {
             onTick: { [weak self] intensity in
                 self?.tickCount += 1
                 self?.tickIntensities.append(intensity)
+            },
+            onAdjust: { [weak self] adjustment in
+                self?.adjustments.append(adjustment)
             }
         )
     }
@@ -302,6 +307,43 @@ final class EdgeGestureEngineTests: XCTestCase {
         engine.reset()
 
         XCTAssertFalse(engine.isTracking)
+    }
+
+    // MARK: - Reporting what moved
+
+    func testEveryMoveIsReported() {
+        let engine = makeEngine()
+        control.value = 0.5
+        control.writes = []
+
+        slide(engine, from: CGPoint(x: 0.95, y: 0.3), to: CGPoint(x: 0.95, y: 0.7))
+
+        XCTAssertEqual(adjustments.map(\.value), control.writes,
+                       "One report per change, carrying the value that was written")
+        XCTAssertTrue(adjustments.allSatisfy { $0.identifier == .volume })
+        XCTAssertTrue(adjustments.allSatisfy { $0.displayName == "Mock" })
+    }
+
+    func testAFingerRestingOnAnEdgeReportsNothing() {
+        let engine = makeEngine()
+
+        // Down, and then held still for a while.
+        for step in 0...10 {
+            engine.consume(frame([touch(0.95, 0.5)], at: Double(step) * 0.02))
+        }
+
+        XCTAssertTrue(engine.isTracking)
+        XCTAssertTrue(adjustments.isEmpty, "Nothing moved, so there is nothing to show")
+    }
+
+    func testMovementTooSmallToChangeTheValueReportsNothing() {
+        let engine = makeEngine()
+
+        // A fraction of a millimetre: not enough to cross a notch.
+        engine.consume(frame([touch(0.95, 0.500)], at: 0))
+        engine.consume(frame([touch(0.95, 0.501)], at: 0.02))
+
+        XCTAssertTrue(adjustments.isEmpty)
     }
 
     // MARK: - Haptics

@@ -31,6 +31,32 @@ enum ControlIdentifier: String, CaseIterable, Identifiable, Codable {
         case .microphone: return "Microphone"
         }
     }
+
+    /// The icon the HUD puts in front of the name. SF Symbols, so they come
+    /// from the system and match what macOS uses for the same ideas.
+    var symbolName: String {
+        switch self {
+        case .none: return "circle.slash"
+        case .volume: return "speaker.wave.2.fill"
+        case .brightness: return "sun.max.fill"
+        case .nightShift: return "moon.fill"
+        case .keyboardBacklight: return "keyboard"
+        case .microphone: return "mic.fill"
+        }
+    }
+}
+
+/// A control that an edge gesture just moved.
+///
+/// The engine reports these so that something else can show them without
+/// knowing what a control is: the HUD takes a name, an icon and a level, and
+/// the sixth control to be added will not touch it.
+struct ControlAdjustment: Equatable {
+    var identifier: ControlIdentifier
+    var displayName: String
+
+    /// Where the control ended up, in `0...1`.
+    var value: Double
 }
 
 /// Something with a single continuous value that an edge gesture can drive.

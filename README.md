@@ -28,7 +28,8 @@ It is written from scratch and shares no code or assets with any other app.
    brightness, the keyboard backlight, the microphone gain or Night Shift, with a
    haptic tick per step. Each of the four edges is configured separately, and
    the settings panel draws the trackpad to scale with the edge being
-   configured lit up. *(done)*
+   configured lit up. A HUD rolls down out of the notch while you swipe,
+   showing what is moving and where it has got to. *(done)*
 3. **System-wide haptic feedback** — additional user-configurable haptic cues.
 
 Audible "click" sounds are intentionally out of scope for the scroll and edge
@@ -91,6 +92,22 @@ events. Scroll deltas and finger positions are consumed in memory to decide
 when to fire a pulse and are never stored or transmitted. The app makes no
 network requests.
 
+## The notch HUD
+
+Swiping an edge rolls a small overlay down out of the notch — the name of what
+you are moving, the level as a percentage, and a purple bar — which rolls back
+up on its own about a second after you stop. None of the controls an edge drives
+puts up a HUD of its own when it is changed this way, so without it a sweep
+moves the world silently.
+
+On a Mac with no notch the same shape appears in the same place, sized to a
+14" MacBook Pro's notch, so the app looks the same on every machine. Detecting
+the real one needs no private API: it is the width left between the two halves
+of the menu bar, and the depth of the screen's top safe area.
+
+Like the intro, it is a non-activating overlay that takes no clicks and never
+becomes the key window.
+
 ## The launch intro
 
 Starting the app plays a flourish once per process: a purple vignette closing in
@@ -132,6 +149,7 @@ it is not headed there.
 HaptiTrack/
   App/            AppDelegate, entry point, menu bar item, permission checks
   Core/           Shared pieces: the tick accumulator, private-framework loading
+  HUD/            The notch overlay that shows what an edge gesture is moving
   Haptics/        HapticEngine protocol + NSHapticFeedbackManager backend
   Launch/         The intro overlay played once per process
   ScrollEngine/   CGEventTap plumbing, scroll-specific wiring

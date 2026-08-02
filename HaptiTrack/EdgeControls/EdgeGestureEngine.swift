@@ -24,6 +24,12 @@ final class EdgeGestureEngine {
     /// Called when a notch is crossed, with the intensity it should be felt at.
     typealias TickHandler = (HapticIntensity) -> Void
 
+    /// Called when a control has actually been moved, so that something else
+    /// can show what happened. Not called for a finger resting on an edge, nor
+    /// for movement too small to change the value — a HUD that appeared because
+    /// a thumb brushed the trackpad would be worse than no HUD.
+    typealias AdjustmentHandler = (ControlAdjustment) -> Void
+
     private struct ActiveGesture {
         var touchIdentifier: Int32
         var zone: EdgeZoneConfiguration
@@ -51,16 +57,19 @@ final class EdgeGestureEngine {
 
     private let controlProvider: ControlProvider
     private let onTick: TickHandler
+    private let onAdjust: AdjustmentHandler
     private var gesture: ActiveGesture?
 
     init(
         zones: [EdgeZoneConfiguration] = EdgeZoneConfiguration.defaults(),
         controlProvider: @escaping ControlProvider,
-        onTick: @escaping TickHandler
+        onTick: @escaping TickHandler,
+        onAdjust: @escaping AdjustmentHandler = { _ in }
     ) {
         self.zones = zones
         self.controlProvider = controlProvider
         self.onTick = onTick
+        self.onAdjust = onAdjust
     }
 
     /// Whether a gesture is currently driving a control.
@@ -155,6 +164,11 @@ final class EdgeGestureEngine {
         if quantised != updated.appliedValue {
             updated.control.value = quantised
             updated.appliedValue = quantised
+            onAdjust(ControlAdjustment(
+                identifier: updated.control.identifier,
+                displayName: updated.control.displayName,
+                value: quantised
+            ))
         }
 
         let outcome = updated.accumulator.consume(

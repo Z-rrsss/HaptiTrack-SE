@@ -28,6 +28,7 @@ final class EdgeControlsController: ObservableObject {
     private let settings: SettingsStore
     private let haptics: HapticEngine
     private let registry: ControlRegistry
+    private let hud: ControlHUDController
     private let engine: EdgeGestureEngine
 
     private var monitor: TrackpadTouchMonitor?
@@ -47,18 +48,32 @@ final class EdgeControlsController: ObservableObject {
     init(
         settings: SettingsStore,
         haptics: HapticEngine = SystemHapticEngine(),
-        registry: ControlRegistry = .shared
+        registry: ControlRegistry = .shared,
+        hud: ControlHUDController? = nil
     ) {
+        // Built here rather than in a default argument: those are evaluated at
+        // the call site, where the main actor cannot be assumed.
+        let hud = hud ?? ControlHUDController()
+
         self.settings = settings
         self.haptics = haptics
         self.registry = registry
+        self.hud = hud
 
         // The engine is deliberately given closures rather than the registry
         // and the haptic engine directly: that is the seam the tests replace.
         self.engine = EdgeGestureEngine(
             zones: settings.edgeZones,
             controlProvider: { [registry] identifier in registry.control(for: identifier) },
-            onTick: { [haptics] intensity in haptics.perform(intensity) }
+            onTick: { [haptics] intensity in haptics.perform(intensity) },
+            // The engine runs on the main thread — the touch monitor hands its
+            // frames over there — which is what makes reaching a main-actor
+            // window controller from here sound.
+            onAdjust: { adjustment in
+                MainActor.assumeIsolated {
+                    hud.show(ControlHUDPresentation(adjustment))
+                }
+            }
         )
 
         settings.objectWillChange
@@ -110,6 +125,7 @@ final class EdgeControlsController: ObservableObject {
     func stop() {
         stopPermissionPolling()
         stopPreview()
+        hud.tearDown()
         guard monitor != nil else {
             status = .stopped
             return
