@@ -6,7 +6,8 @@ HaptiTrack is a lightweight macOS menu bar utility that adds a physical "detent"
 sensation to trackpad scrolling: every notch of scroll produces a crisp haptic
 pulse, the way a well-machined scroll wheel or a camera dial feels in your hand.
 
-> **Status: early development — the scroll haptics module is in progress.**
+> **Status: early development — scroll haptics and edge controls are in
+> place; neither has been through a long shakedown on real hardware yet.**
 
 ## Why this exists
 
@@ -22,9 +23,10 @@ It is written from scratch and shares no code or assets with any other app.
 ## Roadmap
 
 1. **Scroll haptics** — a configurable haptic pulse per scroll detent, with
-   sensitivity control and speed adaptation. *(in progress)*
-2. **Edge gestures** — volume and brightness control by swiping along the edges
-   of the trackpad.
+   sensitivity control and speed adaptation. *(done)*
+2. **Edge controls** — slide along an edge of the trackpad to drive volume,
+   brightness or the Night Shift white point, with a haptic tick per step. Each
+   of the four edges is configured separately. *(done)*
 3. **System-wide haptic feedback** — additional user-configurable haptic cues.
 
 Audible "click" sounds are intentionally out of scope for module 1; they may
@@ -64,30 +66,78 @@ dependencies) rather than a Swift package, because HaptiTrack ships as an
 
 ## Permissions
 
-HaptiTrack observes scroll events system-wide through a `CGEventTap`, which
-requires the **Accessibility** permission:
+The two modules need two *different* permissions. macOS lists them separately
+and an app can hold either without the other.
+
+**Accessibility** — for scroll haptics. HaptiTrack observes scroll events
+system-wide through a `CGEventTap`.
 
 > System Settings → Privacy & Security → Accessibility → enable **HaptiTrack**
 
+**Input Monitoring** — for edge controls. Knowing *where* a finger is on the
+trackpad means reading raw multitouch data, which macOS gates behind
+`kTCCServiceListenEvent` rather than Accessibility.
+
+> System Settings → Privacy & Security → Input Monitoring → enable **HaptiTrack**
+
+The app asks for each one when you first switch the matching module on, and
+picks the work back up by itself once you grant it.
+
 The event tap is *listen-only*: HaptiTrack never modifies, injects or records
-events. Scroll deltas are consumed in memory to decide when to fire a haptic
-pulse and are never stored or transmitted. The app makes no network requests.
+events. Scroll deltas and finger positions are consumed in memory to decide
+when to fire a pulse and are never stored or transmitted. The app makes no
+network requests.
+
+## A note on private API
+
+Module 1 uses nothing but public API. Module 2 cannot: macOS exposes no public
+way to read absolute finger positions, to set the brightness of a built-in
+display, or to change the Night Shift colour temperature. HaptiTrack uses the
+same private frameworks every trackpad and brightness utility on macOS relies
+on — `MultitouchSupport`, `DisplayServices`/`CoreDisplay` and `CoreBrightness`.
+
+This is a deliberate, documented trade-off rather than an accident:
+
+- every use is commented at the point of use, with what was verified and how;
+- everything is resolved at runtime with `dlopen`/`dlsym`, never linked, so a
+  macOS release that renames or removes a symbol turns a feature off instead of
+  stopping the app from launching;
+- each one sits behind a protocol (`AdjustableControl`, `TrackpadTouchMonitor`)
+  so replacing it later touches one file.
+
+It also means HaptiTrack could never ship on the App Store, which is fine —
+it is not headed there.
 
 ## Architecture
 
 ```
 HaptiTrack/
-  App/            AppDelegate, entry point, menu bar item (NSStatusItem)
+  App/            AppDelegate, entry point, menu bar item, permission checks
+  Core/           Shared pieces: the tick accumulator, private-framework loading
   Haptics/        HapticEngine protocol + NSHapticFeedbackManager backend
-  ScrollEngine/   CGEventTap plumbing and the scroll detent state machine
+  ScrollEngine/   CGEventTap plumbing, scroll-specific wiring
+  EdgeControls/   Multitouch monitor, edge geometry, gesture engine
+    Controls/     AdjustableControl protocol and its implementations
   Settings/       Preferences store and SwiftUI settings panel
   Resources/      Assets
 ```
 
-Haptic output sits behind a `HapticEngine` protocol. The shipping backend uses
-the public `NSHapticFeedbackManager` API; the protocol exists so an alternative
-backend (for finer control over actuation intensity and timing) can be added
-later without touching the rest of the app.
+Two seams carry most of the design:
+
+**`TickAccumulator`** (in `Core/`) is the shared heart of both modules. It turns
+a stream of movement deltas into discrete notches, widening the notch spacing
+with speed so the tick *rate* stays bounded instead of blurring into a buzz.
+The scroll module feeds it points of scroll; the edge module feeds it
+millimetres of finger travel. Same code, same feel.
+
+**`AdjustableControl`** is what makes an edge a knob rather than a volume
+button. Anything that can express itself as a `0...1` value can be assigned to
+an edge; the gesture code knows nothing about audio or displays.
+
+Haptic output likewise sits behind a `HapticEngine` protocol. The shipping
+backend uses the public `NSHapticFeedbackManager` API; the protocol exists so an
+alternative backend (for finer control over actuation intensity and timing) can
+be added later without touching the rest of the app.
 
 ## Contributing
 
