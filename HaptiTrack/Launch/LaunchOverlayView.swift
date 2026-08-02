@@ -31,7 +31,7 @@ struct LaunchOverlayView: View {
 
     @ObservedObject var model: LaunchOverlayModel
 
-    private static let violet = Color(red: 0.45, green: 0.18, blue: 0.85)
+    private static let violet = AppColor.accent
 
     /// How far in from each edge the tint reaches, as a fraction of the
     /// dimension it runs into. The sides come in less far than the top and

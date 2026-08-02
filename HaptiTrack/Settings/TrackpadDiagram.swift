@@ -103,18 +103,18 @@ struct TrackpadDiagram: View {
             // The glow is what makes the change read as something switching on
             // rather than as a swatch quietly changing colour.
             .shadow(
-                color: isHighlighted ? Color.blue.opacity(0.7) : .clear,
+                color: isHighlighted ? AppColor.accent.opacity(0.7) : .clear,
                 radius: isHighlighted ? 6 : 0
             )
             .frame(width: frame.width, height: frame.height)
             .position(x: frame.midX, y: frame.midY)
     }
 
-    /// Blue for the edge being configured, near-invisible for an edge assigned
-    /// to nothing, a neutral grey for the rest.
+    /// The app's purple for the edge being configured, near-invisible for an
+    /// edge assigned to nothing, a neutral grey for the rest.
     private func color(for zone: EdgeZoneConfiguration, isHighlighted: Bool) -> Color {
         if isHighlighted {
-            return .blue.opacity(zone.isEnabled ? 0.85 : 0.5)
+            return AppColor.accent.opacity(zone.isEnabled ? 0.95 : 0.55)
         }
         return .secondary.opacity(zone.isEnabled ? 0.3 : 0.12)
     }
