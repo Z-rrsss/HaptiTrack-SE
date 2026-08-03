@@ -28,7 +28,12 @@ import OSLog
 final class NightShiftControl: AdjustableControl {
 
     /// The subset of `CBBlueLightClient` this control uses.
-    @objc private protocol BlueLightClient {
+    ///
+    /// Internal rather than private so a test can stand in for the private
+    /// class: a ramp from off to full and back is the behaviour that broke
+    /// here, and it should be checkable without tinting the screen of whoever
+    /// runs the tests.
+    @objc protocol BlueLightClient {
         func setStrength(_ strength: Float, commit: Bool) -> Bool
         func getStrength(_ strength: UnsafeMutablePointer<Float>) -> Bool
         func setEnabled(_ enabled: Bool) -> Bool
@@ -39,25 +44,35 @@ final class NightShiftControl: AdjustableControl {
     /// Objective-C type encoding, read off the running class, is
     /// `{?=BBBi{?={?=ii}{?=ii}}QB}`:
     ///
-    ///     +0   BOOL    active                  ← used
-    ///     +1   BOOL    enabled
-    ///     +2   BOOL    sunSchedulePermitted
+    ///     +0   BOOL    — always 1 on this machine, whatever it means
+    ///     +1   BOOL    the switch                        ← used
+    ///     +2   BOOL    — always 1 on this machine
     ///     +4   int32   mode
     ///     +8   struct  schedule, two hh:mm pairs
     ///     +24  uint64  disableFlags
     ///     +32  BOOL    available
     ///     ---  40 bytes
     ///
-    /// Dumped from a real call on macOS 26.5, which came back
-    /// `01 01 01 00 | 00000000 | 16000000 00000000 07000000 00000000 | …` —
-    /// Night Shift on, mode 0, schedule 22:00 to 07:00 — matching the layout
-    /// exactly. Only the first byte is ever read, and it sits at offset zero of
-    /// a struct that starts with three `BOOL`s, which is the one field a layout
-    /// change could hardly move. The buffer is larger than the struct so that
-    /// growing it cannot overflow anything.
+    /// **Which byte is the switch was measured, not assumed**, on macOS 26.5,
+    /// by toggling Night Shift and dumping the struct in each state:
+    ///
+    ///     enabled, strength 0.9   01 01 01 …
+    ///     setEnabled(false)       01 00 01 …
+    ///     setEnabled(true)        01 01 01 …
+    ///     strength 0, disabled    01 00 01 …
+    ///
+    /// Byte 1 follows the switch exactly. Byte 0 never moved — it was 1 in
+    /// every state, including with Night Shift off and the screen plainly not
+    /// tinted — so whatever it records, it is not whether the screen is warm.
+    /// Reading it meant this control believed Night Shift was always already
+    /// on: it reported a strength for an untinted screen and never switched
+    /// Night Shift on when a sweep asked it to.
+    ///
+    /// The buffer is larger than the struct so that growing it cannot overflow
+    /// anything.
     private enum StatusLayout {
         static let bufferSize = 64
-        static let active = 0
+        static let isOn = 1
     }
 
     private let logger = Logger(subsystem: AppInfo.subsystem, category: "NightShiftControl")
@@ -113,6 +128,13 @@ final class NightShiftControl: AdjustableControl {
         client = unsafeBitCast(instance, to: BlueLightClient.self)
     }
 
+    /// Builds the control on a given client, for tests.
+    init(client: BlueLightClient?, canReadStatus: Bool = true, isReductionSupported: Bool = true) {
+        self.client = client
+        self.canReadStatus = canReadStatus
+        self.isReductionSupported = isReductionSupported
+    }
+
     /// `+[CBBlueLightClient supportsBlueLightReduction]`, called through its
     /// implementation pointer rather than `perform(_:)`: the method returns a
     /// `BOOL`, and reading a `BOOL` back out of `perform`'s object-typed return
@@ -143,7 +165,7 @@ final class NightShiftControl: AdjustableControl {
             // has on file from last time. Otherwise a sweep starting on a
             // normal-looking screen would pick up wherever the slider was left
             // and throw the display there on the first tick.
-            guard isTinting else { return 0 }
+            guard isOn else { return 0 }
 
             var strength: Float = 0
             guard client.getStrength(&strength) else { return 0 }
@@ -162,27 +184,32 @@ final class NightShiftControl: AdjustableControl {
             // Strength first, switch second. Turning Night Shift on before
             // writing would tint the screen at whatever strength was left over
             // — often full orange — for however long it takes the next line to
-            // run. The strength is written again after enabling, in case
-            // setting it while switched off was ignored.
+            // run. Writing while off does land (measured: getStrength read the
+            // new value back with Night Shift disabled), so this is enough to
+            // make the first tick of a sweep the value the finger asked for;
+            // the second write is what makes that true on a machine where it
+            // does not land.
             _ = client.setStrength(Float(clamped), commit: true)
-            if !isTinting {
+            if !isOn {
                 _ = client.setEnabled(true)
                 _ = client.setStrength(Float(clamped), commit: true)
             }
         }
     }
 
-    /// Whether the screen is warm right now.
+    /// Whether Night Shift is switched on — which is what decides whether the
+    /// screen is tinted at all, and therefore whether the strength on file is
+    /// worth reporting.
     ///
-    /// This reads `active` rather than `enabled`, and the difference matters:
-    /// with a sunset-to-sunrise schedule Night Shift is *enabled* all day and
-    /// only *active* after dark, so reporting a strength at noon would be
-    /// reporting a tint that is not on the screen.
-    private var isTinting: Bool {
+    /// The flag is read fresh rather than remembered, so Night Shift being
+    /// toggled from System Settings between two sweeps cannot leave this
+    /// control believing something stale.
+    private var isOn: Bool {
         guard let client, canReadStatus else {
-            // No way to ask, so assume the strength on file is the strength on
-            // screen — the behaviour this control had before it could ask.
-            return true
+            // No way to ask. Assuming it is off is the safe way round: the
+            // worst case is switching on something already on, where the old
+            // assumption's worst case was a sweep that did nothing at all.
+            return false
         }
 
         var buffer = [UInt8](repeating: 0, count: StatusLayout.bufferSize)
@@ -190,7 +217,7 @@ final class NightShiftControl: AdjustableControl {
             guard let base = raw.baseAddress else { return false }
             return client.getBlueLightStatus(base)
         }
-        guard didRead else { return true }
-        return buffer[StatusLayout.active] != 0
+        guard didRead else { return false }
+        return buffer[StatusLayout.isOn] != 0
     }
 }
