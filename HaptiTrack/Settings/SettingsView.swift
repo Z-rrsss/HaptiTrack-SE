@@ -20,6 +20,11 @@ struct SettingsView: View {
                 .tabItem { Label("Edges", systemImage: "rectangle.inset.filled") }
         }
         .frame(width: 460)
+        // A TabView has no height of its own: it takes whatever it is offered,
+        // and what the window offers is the screen. Both tabs already ask for
+        // their ideal height, so this passes the taller one up instead of
+        // letting the window grow to the full height of the display.
+        .fixedSize(horizontal: false, vertical: true)
     }
 }
 
