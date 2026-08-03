@@ -90,6 +90,9 @@ final class TrackpadTouchMonitor {
     private typealias DeviceGetDimensions = @convention(c) (
         UnsafeMutableRawPointer, UnsafeMutablePointer<Int32>, UnsafeMutablePointer<Int32>
     ) -> Int32
+    /// `bool MTDeviceIsBuiltIn(MTDeviceRef)`. Verified present on macOS 26.5,
+    /// answering true for the trackpad and false for a Magic Mouse.
+    private typealias DeviceIsBuiltIn = @convention(c) (UnsafeMutableRawPointer) -> Bool
 
     /// `int (*)(MTDeviceRef, MTTouch*, int32_t, double, int32_t)`
     fileprivate typealias MTContactCallback = @convention(c) (
@@ -138,7 +141,12 @@ final class TrackpadTouchMonitor {
     private let deviceStop: DeviceStop?
 
     private var devices: [UnsafeMutableRawPointer] = []
-    private var surface: TrackpadSurfaceSize = .fallback
+
+    /// One surface per open device, because "multitouch device" is a wider
+    /// category than "trackpad": a Magic Mouse is one too, and measuring its
+    /// frames with the trackpad's ruler would put a finger's millimetres in
+    /// the wrong place entirely.
+    private let surfaces = SurfaceStore()
 
     /// Set once the reported coordinates stop making sense, which is the only
     /// signal available that the struct layout has moved.
@@ -146,9 +154,9 @@ final class TrackpadTouchMonitor {
 
     var isRunning: Bool { !devices.isEmpty }
 
-    /// The size the device reported when it was started, or the fallback if it
-    /// has not been started or would not say.
-    var surfaceSize: TrackpadSurfaceSize { surface }
+    /// The trackpad the settings panel should draw: the built-in one, or the
+    /// largest of whatever else is attached. The fallback until started.
+    var surfaceSize: TrackpadSurfaceSize { surfaces.primary }
 
     /// - Parameter handler: Called on the main thread, once per frame.
     init(handler: @escaping (TrackpadTouchFrame) -> Void) {
@@ -181,6 +189,10 @@ final class TrackpadTouchMonitor {
 
         activeMonitor.set(self)
         layoutLooksBroken = false
+        surfaces.removeAll()
+
+        let isBuiltIn: DeviceIsBuiltIn? = framework.function("MTDeviceIsBuiltIn")
+        var candidates: [Candidate] = []
 
         for index in 0..<CFArrayGetCount(list) {
             guard let raw = CFArrayGetValueAtIndex(list, index) else { continue }
@@ -190,10 +202,17 @@ final class TrackpadTouchMonitor {
             deviceStart(device, 0)
             devices.append(device)
 
-            if let size = dimensions(of: device, framework: framework) {
-                surface = size
-            }
+            guard let size = dimensions(of: device, framework: framework) else { continue }
+            surfaces.set(size, for: device)
+            candidates.append(Candidate(surface: size, isBuiltIn: isBuiltIn?(device) ?? false))
+            logger.info("""
+                Device \(index) is \(size.width, format: .fixed(precision: 1)) × \
+                \(size.height, format: .fixed(precision: 1)) mm, \
+                built in: \(isBuiltIn?(device) ?? false).
+                """)
         }
+
+        surfaces.primary = Self.primarySurface(among: candidates)
 
         guard !devices.isEmpty else { throw StartError.noDevices }
         logger.info("Touch monitor started on \(self.devices.count) device(s).")
@@ -206,8 +225,36 @@ final class TrackpadTouchMonitor {
             unregisterCallback?(device, trackpadContactCallback)
         }
         devices.removeAll()
+        surfaces.removeAll()
         activeMonitor.clear(self)
         logger.info("Touch monitor stopped.")
+    }
+
+    /// One device's size and whether it is the built-in trackpad.
+    struct Candidate: Equatable {
+        var surface: TrackpadSurfaceSize
+        var isBuiltIn: Bool
+    }
+
+    /// The device the settings panel should draw.
+    ///
+    /// The built-in trackpad wins outright. Failing that, the largest surface:
+    /// on a desktop with both a Magic Trackpad and a Magic Mouse attached, the
+    /// trackpad is the bigger of the two by a wide margin.
+    ///
+    /// Taking whichever device happened to be last in the framework's list —
+    /// which is what this used to do — drew the settings diagram at the size
+    /// of a Magic Mouse: 51 × 91 mm, taller than it is wide, so the trackpad
+    /// came out portrait and dragged the settings window down the screen with
+    /// it.
+    static func primarySurface(among candidates: [Candidate]) -> TrackpadSurfaceSize {
+        if let builtIn = candidates.first(where: \.isBuiltIn) {
+            return builtIn.surface
+        }
+        let largest = candidates.max { left, right in
+            left.surface.width * left.surface.height < right.surface.width * right.surface.height
+        }
+        return largest?.surface ?? .fallback
     }
 
     /// Physical surface size. `MTDeviceGetSensorSurfaceDimensions` reports
@@ -227,7 +274,14 @@ final class TrackpadTouchMonitor {
     // MARK: - Frame decoding
 
     /// Called on the framework's own thread.
-    fileprivate func handleFrame(touches: UnsafeMutableRawPointer?, count: Int32) {
+    ///
+    /// - Parameter device: The device the frame came from, which is what says
+    ///   how many millimetres its normalised coordinates are worth.
+    fileprivate func handleFrame(
+        device: UnsafeMutableRawPointer?,
+        touches: UnsafeMutableRawPointer?,
+        count: Int32
+    ) {
         guard !layoutLooksBroken else { return }
 
         var decoded: [TrackpadTouch] = []
@@ -261,7 +315,7 @@ final class TrackpadTouchMonitor {
         let frame = TrackpadTouchFrame(
             touches: decoded,
             timestamp: ProcessInfo.processInfo.systemUptime,
-            surface: surface
+            surface: surfaces.surface(for: device)
         )
         DispatchQueue.main.async { [weak self] in
             self?.handler(frame)
@@ -310,7 +364,54 @@ private final class ActiveMonitorBox {
 
 private let activeMonitor = ActiveMonitorBox()
 
-private let trackpadContactCallback: TrackpadTouchMonitor.MTContactCallback = { _, touches, count, _, _ in
-    activeMonitor.current?.handleFrame(touches: touches, count: count)
+private let trackpadContactCallback: TrackpadTouchMonitor.MTContactCallback = { device, touches, count, _, _ in
+    activeMonitor.current?.handleFrame(device: device, touches: touches, count: count)
     return 0
+}
+
+/// The physical size of each open device, plus which one the settings panel
+/// draws.
+///
+/// Lock-guarded because it is written on the main thread while devices are
+/// opened and closed, and read from the framework's own thread on every frame.
+private final class SurfaceStore {
+
+    private let lock = NSLock()
+    private var byDevice: [UnsafeMutableRawPointer: TrackpadSurfaceSize] = [:]
+    private var primarySurface: TrackpadSurfaceSize = .fallback
+
+    var primary: TrackpadSurfaceSize {
+        get {
+            lock.lock()
+            defer { lock.unlock() }
+            return primarySurface
+        }
+        set {
+            lock.lock()
+            defer { lock.unlock() }
+            primarySurface = newValue
+        }
+    }
+
+    func set(_ surface: TrackpadSurfaceSize, for device: UnsafeMutableRawPointer) {
+        lock.lock()
+        defer { lock.unlock() }
+        byDevice[device] = surface
+    }
+
+    /// The size of the device a frame came from, falling back to the primary
+    /// one for a device that would not report its dimensions.
+    func surface(for device: UnsafeMutableRawPointer?) -> TrackpadSurfaceSize {
+        lock.lock()
+        defer { lock.unlock() }
+        guard let device, let surface = byDevice[device] else { return primarySurface }
+        return surface
+    }
+
+    func removeAll() {
+        lock.lock()
+        defer { lock.unlock() }
+        byDevice.removeAll()
+        primarySurface = .fallback
+    }
 }
