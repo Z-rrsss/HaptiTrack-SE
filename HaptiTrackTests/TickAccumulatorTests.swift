@@ -1,7 +1,10 @@
 import XCTest
 @testable import HaptiTrack
 
-final class ScrollDetentEngineTests: XCTestCase {
+/// The shared accumulator in `Core/`, exercised in the vocabulary of the scroll
+/// module because that is where it started. It is not scroll-specific: the edge
+/// controls feed the same type millimetres of finger travel.
+final class TickAccumulatorTests: XCTestCase {
 
     // MARK: - Accumulation
 
