@@ -322,7 +322,7 @@
 		AA0000000000000000000062 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = HaptiTrack.icon;
+				ASSETCATALOG_COMPILER_APPICON_NAME = HaptiTrack;
 				CODE_SIGN_IDENTITY = "-";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
@@ -349,7 +349,7 @@
 		AA0000000000000000000063 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = HaptiTrack.icon;
+				ASSETCATALOG_COMPILER_APPICON_NAME = HaptiTrack;
 				CODE_SIGN_IDENTITY = "-";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
