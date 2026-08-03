@@ -325,6 +325,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_LSUIElement = YES;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright © 2026 Andrea De Pasquale. MIT licensed.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "HaptiTrack sets the input level of your microphone when you assign it to an edge of the trackpad. It never records, listens to or transmits audio.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -351,6 +352,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_LSUIElement = YES;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright © 2026 Andrea De Pasquale. MIT licensed.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "HaptiTrack sets the input level of your microphone when you assign it to an edge of the trackpad. It never records, listens to or transmits audio.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
