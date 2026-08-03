@@ -75,6 +75,39 @@ final class SettingsWindowSizingTests: XCTestCase {
         XCTAssertGreaterThan(window, 0)
     }
 
+    /// The panel has to stay a sensible height whatever surface the diagram is
+    /// handed — a Magic Mouse's, say, which is how it grew to the height of the
+    /// screen in the first place.
+    func testTheWindowStaysSensibleWhateverTheDiagramIsMeasuringAgainst() {
+        let surfaces = [
+            TrackpadSurfaceSize(width: 157.8, height: 97.8),
+            TrackpadSurfaceSize(width: 51.52, height: 90.56),
+            TrackpadSurfaceSize(width: 0, height: 0),
+        ]
+
+        for surface in surfaces {
+            let width: Double = 190
+            let height = TrackpadDiagramLayout.height(forWidth: width, surface: surface)
+            let drawn = NSHostingController(
+                rootView: TrackpadDiagram(
+                    zones: EdgeZoneConfiguration.defaults(),
+                    selectedEdge: .right,
+                    surface: surface
+                )
+                .frame(width: width, height: height)
+            ).sizeThatFits(in: CGSize(width: 460, height: CGFloat.greatestFiniteMagnitude))
+
+            XCTAssertEqual(drawn.width, width, accuracy: 0.5)
+            XCTAssertEqual(drawn.height, height, accuracy: 0.5)
+            XCTAssertGreaterThan(
+                drawn.width,
+                drawn.height,
+                "The diagram is drawn portrait for \(surface)"
+            )
+            XCTAssertLessThan(drawn.height, maximumSensibleHeight)
+        }
+    }
+
     func testTheTrackpadDiagramHasAHeightOfItsOwn() {
         // It is built on a GeometryReader, which has no size of its own, so it
         // only stays finite because the aspect ratio ties its height to a

@@ -50,11 +50,34 @@ struct TrackpadDiagramLayout: Equatable {
     }
 
     /// The proportions of the trackpad itself, for the view to size itself by.
+    ///
+    /// Always landscape. A trackpad is wider than it is tall, so a surface that
+    /// says otherwise is not a trackpad — it is the wrong device, or a pair of
+    /// numbers the wrong way round — and drawing a portrait one would be
+    /// drawing hardware that does not exist. Flipping the ratio keeps how
+    /// elongated the surface is while refusing to stand it on end.
     var aspectRatio: Double {
-        guard surface.width > 0, surface.height > 0 else {
-            return TrackpadSurfaceSize.fallback.width / TrackpadSurfaceSize.fallback.height
-        }
-        return surface.width / surface.height
+        let fallback = TrackpadSurfaceSize.fallback.width / TrackpadSurfaceSize.fallback.height
+        guard surface.width > 0, surface.height > 0 else { return fallback }
+
+        let ratio = surface.width / surface.height
+        let landscape = max(ratio, 1 / ratio)
+
+        // A square is no more a trackpad than a portrait rectangle is, so
+        // there is nothing to preserve the shape of: draw the trackpad this
+        // app is for.
+        return landscape > 1 ? landscape : fallback
+    }
+
+    /// How tall the diagram is when drawn `width` points wide.
+    ///
+    /// Callers use this to give the diagram a definite size. Its body is a
+    /// `GeometryReader`, which has no size of its own and grows into whatever
+    /// it is offered, so leaving the height to the surrounding layout is how
+    /// a settings panel ends up the height of the screen.
+    static func height(forWidth width: Double, surface: TrackpadSurfaceSize) -> Double {
+        let layout = TrackpadDiagramLayout(zones: [], surface: surface, size: .zero)
+        return width / layout.aspectRatio
     }
 
     // MARK: - Depths

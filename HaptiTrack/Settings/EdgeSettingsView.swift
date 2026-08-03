@@ -13,6 +13,10 @@ struct EdgeSettingsView: View {
 
     @State private var selectedEdge: TrackpadEdge = .right
 
+    /// Small enough to read as a caption to the picker above it rather than as
+    /// the point of the panel.
+    private static let diagramWidth: Double = 190
+
     var body: some View {
         Form {
             Section {
@@ -32,15 +36,26 @@ struct EdgeSettingsView: View {
                 // Two ways of saying the same thing: the picker names the
                 // edges, the diagram points at them. Both drive the one piece
                 // of state, so the lit strip is always the section below.
+                //
+                // Sized outright rather than by a maximum. It is a reference
+                // for which edge is being configured, not the subject of the
+                // panel, and a definite height is also what stops the panel
+                // inheriting whatever the diagram feels like being.
                 TrackpadDiagram(
                     zones: settings.edgeZones,
                     selectedEdge: selectedEdge,
                     surface: edgeControls.surface,
                     onSelect: { selectedEdge = $0 }
                 )
-                .frame(maxWidth: 300)
+                .frame(
+                    width: Self.diagramWidth,
+                    height: TrackpadDiagramLayout.height(
+                        forWidth: Self.diagramWidth,
+                        surface: edgeControls.surface
+                    )
+                )
                 .frame(maxWidth: .infinity, alignment: .center)
-                .padding(.vertical, 4)
+                .padding(.vertical, 2)
             }
 
             edgeSection(for: selectedEdge)

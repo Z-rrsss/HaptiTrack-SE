@@ -141,6 +141,58 @@ final class TrackpadDiagramTests: XCTestCase {
         XCTAssertEqual(layout().aspectRatio, 2, accuracy: 0.0001)
     }
 
+    // MARK: - Always a trackpad shape
+
+    /// Every surface the app could be handed, including ones that are not a
+    /// trackpad at all.
+    private var surfacesToDrawAt: [(name: String, surface: TrackpadSurfaceSize)] {
+        [
+            ("built-in trackpad", TrackpadSurfaceSize(width: 157.8, height: 97.8)),
+            ("Magic Trackpad", TrackpadSurfaceSize(width: 160, height: 114.9)),
+            ("fallback", .fallback),
+            // The one that started this: a Magic Mouse is a multitouch device
+            // too, and it is taller than it is wide.
+            ("Magic Mouse", TrackpadSurfaceSize(width: 51.52, height: 90.56)),
+            // Neither of these is a trackpad shape at all, so both fall back
+            // to the one this app is for.
+            ("square", TrackpadSurfaceSize(width: 100, height: 100)),
+            ("nonsense", TrackpadSurfaceSize(width: 0, height: 0)),
+        ]
+    }
+
+    func testTheDiagramIsAlwaysWiderThanItIsTall() {
+        for (name, surface) in surfacesToDrawAt {
+            let height = TrackpadDiagramLayout.height(forWidth: 190, surface: surface)
+
+            XCTAssertGreaterThan(190, height, "The diagram came out portrait on the \(name)")
+            XCTAssertGreaterThan(height, 0, "The diagram came out with no height on the \(name)")
+        }
+    }
+
+    func testTheAspectRatioIsNeverPortrait() {
+        for (name, surface) in surfacesToDrawAt {
+            let layout = TrackpadDiagramLayout(zones: [], surface: surface, size: .zero)
+
+            XCTAssertGreaterThanOrEqual(layout.aspectRatio, 1, "\(name) stood the trackpad on end")
+        }
+    }
+
+    func testAPortraitSurfaceKeepsItsElongationButNotItsOrientation() {
+        // 51.52 × 90.56 is 1.76 times as long as it is wide. Drawn on its side
+        // it stays 1.76 times as long, rather than being squashed to a square.
+        let mouse = TrackpadSurfaceSize(width: 51.52, height: 90.56)
+        let layout = TrackpadDiagramLayout(zones: [], surface: mouse, size: .zero)
+
+        XCTAssertEqual(layout.aspectRatio, 90.56 / 51.52, accuracy: 0.0001)
+    }
+
+    func testTheHeightFollowsTheWidthItIsAskedFor() {
+        let surface = TrackpadSurfaceSize(width: 200, height: 100)
+
+        XCTAssertEqual(TrackpadDiagramLayout.height(forWidth: 190, surface: surface), 95, accuracy: 0.0001)
+        XCTAssertEqual(TrackpadDiagramLayout.height(forWidth: 300, surface: surface), 150, accuracy: 0.0001)
+    }
+
     func testAnAbsurdSurfaceFallsBackToAKnownShape() {
         let layout = TrackpadDiagramLayout(
             zones: [],
