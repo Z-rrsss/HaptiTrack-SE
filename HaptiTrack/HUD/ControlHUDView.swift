@@ -65,30 +65,38 @@ struct ControlHUDView: View {
         .allowsHitTesting(false)
     }
 
+    /// The HUD is as wide as the notch it grows out of, which is around 185
+    /// points and not negotiable, so the row has to fit in what is left after
+    /// the padding. "Keyboard Backlight" is the longest label and the one this
+    /// is sized against; anything longer shrinks rather than truncating,
+    /// because a clipped name reads as a bug and a slightly smaller one does
+    /// not.
     private var content: some View {
-        VStack(spacing: 7) {
-            HStack(spacing: 7) {
+        VStack(spacing: 6) {
+            HStack(spacing: 5) {
                 Image(systemName: model.presentation.symbolName)
-                    .font(.system(size: 12, weight: .semibold))
-                    .frame(width: 16)
+                    .font(.system(size: 11, weight: .semibold))
+                    .frame(width: 14)
 
                 Text(model.presentation.title)
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.system(size: 11, weight: .medium))
                     .lineLimit(1)
+                    .minimumScaleFactor(0.75)
 
-                Spacer(minLength: 8)
+                Spacer(minLength: 4)
 
                 Text(model.presentation.percentageText)
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.system(size: 11, weight: .semibold))
                     .monospacedDigit()
                     .foregroundStyle(.white.opacity(0.7))
+                    .layoutPriority(1)
             }
             .foregroundStyle(.white)
 
             bar
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 4)
+        .padding(.horizontal, 11)
+        .padding(.top, 3)
     }
 
     private var bar: some View {

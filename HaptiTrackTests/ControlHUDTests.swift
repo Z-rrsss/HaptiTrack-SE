@@ -23,6 +23,22 @@ final class ControlHUDTests: XCTestCase {
         XCTAssertEqual(notch.size.height, 32, accuracy: 0.0001)
     }
 
+    func testADifferentMacIsMeasuredDifferently() {
+        // The width is never assumed from another machine's numbers: a screen
+        // of a different width, or menu bar strips of a different size, give a
+        // different notch.
+        let narrower = NotchGeometry.make(
+            screenWidth: 1512,
+            safeAreaTop: 32,
+            auxiliaryLeftWidth: 668,
+            auxiliaryRightWidth: 669
+        )
+
+        XCTAssertTrue(narrower.isPhysical)
+        XCTAssertEqual(narrower.size.width, 175, accuracy: 0.0001)
+        XCTAssertNotEqual(narrower.size.width, NotchGeometry.standard.width)
+    }
+
     func testNoSafeAreaMeansNoNotch() {
         // An external display, a Mac mini, or any notebook made before 2021.
         let notch = NotchGeometry.make(
@@ -36,7 +52,7 @@ final class ControlHUDTests: XCTestCase {
         XCTAssertEqual(notch.size, NotchGeometry.standard)
     }
 
-    func testANotchWithNoMenuBarAreasToMeasureBorrowsTheStandardWidth() {
+    func testMissingMenuBarAreasMeanNoNotch() {
         let notch = NotchGeometry.make(
             screenWidth: 1728,
             safeAreaTop: 34,
@@ -44,12 +60,35 @@ final class ControlHUDTests: XCTestCase {
             auxiliaryRightWidth: nil
         )
 
-        XCTAssertTrue(notch.isPhysical, "The safe area is the notch; only its width is unknown")
-        XCTAssertEqual(notch.size.width, NotchGeometry.standard.width, accuracy: 0.0001)
-        XCTAssertEqual(notch.size.height, 34, accuracy: 0.0001, "The real depth is known and used")
+        XCTAssertFalse(notch.isPhysical, "Nothing to measure the gap between")
+        XCTAssertEqual(notch.size, NotchGeometry.standard)
     }
 
-    func testNonsensicalMenuBarAreasFallBackRatherThanInvertTheNotch() {
+    func testEmptyMenuBarAreasMeanNoNotch() {
+        let notch = NotchGeometry.make(
+            screenWidth: 1728,
+            safeAreaTop: 32,
+            auxiliaryLeftWidth: 0,
+            auxiliaryRightWidth: 0
+        )
+
+        XCTAssertFalse(notch.isPhysical, "Menu bar strips of no width are not either side of anything")
+        XCTAssertEqual(notch.size, NotchGeometry.standard)
+    }
+
+    func testOneEmptyMenuBarAreaMeansNoNotch() {
+        let notch = NotchGeometry.make(
+            screenWidth: 1728,
+            safeAreaTop: 32,
+            auxiliaryLeftWidth: 771,
+            auxiliaryRightWidth: 0
+        )
+
+        XCTAssertFalse(notch.isPhysical)
+        XCTAssertEqual(notch.size, NotchGeometry.standard)
+    }
+
+    func testMenuBarAreasWiderThanTheScreenFallBackRatherThanInvertTheNotch() {
         let notch = NotchGeometry.make(
             screenWidth: 1728,
             safeAreaTop: 32,
@@ -57,7 +96,8 @@ final class ControlHUDTests: XCTestCase {
             auxiliaryRightWidth: 900
         )
 
-        XCTAssertEqual(notch.size.width, NotchGeometry.standard.width, accuracy: 0.0001)
+        XCTAssertFalse(notch.isPhysical)
+        XCTAssertEqual(notch.size, NotchGeometry.standard)
         XCTAssertGreaterThan(notch.size.width, 0)
     }
 
@@ -74,28 +114,49 @@ final class ControlHUDTests: XCTestCase {
 
     func testTheHUDHangsFromTheTopOfTheScreenAndIsCentred() {
         let notch = NotchGeometry(size: CGSize(width: 185, height: 32), isPhysical: true)
-        let frame = notch.hudFrame(in: screenFrame, width: 260, contentHeight: 46)
+        let frame = notch.hudFrame(in: screenFrame, contentHeight: 46)
 
         XCTAssertEqual(frame.midX, screenFrame.midX, accuracy: 0.0001)
         XCTAssertEqual(frame.maxY, screenFrame.maxY, accuracy: 0.0001, "Flush with the top edge")
         XCTAssertEqual(frame.height, 78, accuracy: 0.0001, "The notch plus what hangs below it")
     }
 
-    func testTheHUDIsNeverNarrowerThanTheNotchItGrowsOutOf() {
-        let wideNotch = NotchGeometry(size: CGSize(width: 400, height: 32), isPhysical: true)
-        let frame = wideNotch.hudFrame(in: screenFrame, width: 260, contentHeight: 46)
+    func testTheHUDIsExactlyAsWideAsTheNotchItGrowsOutOf() {
+        for width in [140.0, 175.0, 185.0, 220.0] {
+            let notch = NotchGeometry(size: CGSize(width: width, height: 32), isPhysical: true)
 
-        XCTAssertEqual(frame.width, 400, accuracy: 0.0001)
+            XCTAssertEqual(
+                notch.hudFrame(in: screenFrame, contentHeight: 46).width,
+                width,
+                accuracy: 0.0001,
+                "A HUD wider than the notch is a black bar over the menu bar"
+            )
+        }
+    }
+
+    func testTheHUDTakesItsWidthFromTheMeasuredNotch() {
+        // End to end: menu bar strips in, HUD frame out, no fixed width in
+        // between.
+        let notch = NotchGeometry.make(
+            screenWidth: 1728,
+            safeAreaTop: 32,
+            auxiliaryLeftWidth: 771,
+            auxiliaryRightWidth: 772
+        )
+        let frame = notch.hudFrame(in: screenFrame, contentHeight: 46)
+
+        XCTAssertEqual(frame.width, 185, accuracy: 0.0001)
     }
 
     func testTheHUDIsTheSameShapeWithAndWithoutANotch() {
-        // The whole point of the invented notch: identical hardware behaviour.
+        // The whole point of the invented notch: identical behaviour on
+        // hardware that has none.
         let physical = NotchGeometry(size: NotchGeometry.standard, isPhysical: true)
         let invented = NotchGeometry(size: NotchGeometry.standard, isPhysical: false)
 
         XCTAssertEqual(
-            physical.hudFrame(in: screenFrame, width: 260, contentHeight: 46),
-            invented.hudFrame(in: screenFrame, width: 260, contentHeight: 46)
+            physical.hudFrame(in: screenFrame, contentHeight: 46),
+            invented.hudFrame(in: screenFrame, contentHeight: 46)
         )
     }
 
@@ -103,10 +164,22 @@ final class ControlHUDTests: XCTestCase {
         let notch = NotchGeometry(size: NotchGeometry.standard, isPhysical: false)
         // An external display sitting to the right of and above the built-in.
         let external = CGRect(x: 1728, y: 200, width: 2560, height: 1440)
-        let frame = notch.hudFrame(in: external, width: 260, contentHeight: 46)
+        let frame = notch.hudFrame(in: external, contentHeight: 46)
 
         XCTAssertEqual(frame.midX, external.midX, accuracy: 0.0001)
         XCTAssertEqual(frame.maxY, external.maxY, accuracy: 0.0001)
+    }
+
+    func testThisMachinesNotchIsMeasuredNotAssumed() throws {
+        let screen = try XCTUnwrap(NSScreen.main)
+        let notch = NotchGeometry.forScreen(screen)
+        try XCTSkipUnless(notch.isPhysical, "This Mac has no notch to measure")
+
+        let left = try XCTUnwrap(screen.auxiliaryTopLeftArea?.width)
+        let right = try XCTUnwrap(screen.auxiliaryTopRightArea?.width)
+
+        XCTAssertEqual(notch.size.width, screen.frame.width - left - right, accuracy: 0.0001)
+        XCTAssertEqual(notch.size.height, screen.safeAreaInsets.top, accuracy: 0.0001)
     }
 
     // MARK: - What the HUD says

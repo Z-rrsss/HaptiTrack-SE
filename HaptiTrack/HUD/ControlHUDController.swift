@@ -27,11 +27,6 @@ private enum HUDTiming {
 @MainActor
 final class ControlHUDController {
 
-    /// Wide enough for "Keyboard Backlight" and a percentage without crowding
-    /// them, and wider than any notch, so the shape never looks pinched where
-    /// it meets one.
-    private static let width: Double = 260
-
     private static let rollDown: Animation = .spring(response: 0.3, dampingFraction: 0.82)
     private static let rollUp: Animation = .easeIn(duration: 0.2)
 
@@ -121,16 +116,17 @@ final class ControlHUDController {
     // MARK: - The window
 
     /// Puts the panel back under the notch of whichever screen is in front now.
-    /// Recomputed on every show, because the answer changes when the user moves
-    /// to an external display — where there is no notch, and the HUD falls back
-    /// to the invented one.
+    ///
+    /// Measured on every show, never remembered: the answer changes when the
+    /// user moves to an external display, and it differs between Macs. Nothing
+    /// here carries a width of its own — the notch this machine actually has
+    /// is what the HUD is.
     private func position(_ panel: NSPanel) {
         guard let screen = NSScreen.main else { return }
 
         let notch = NotchGeometry.forScreen(screen)
         let frame = notch.hudFrame(
             in: screen.frame,
-            width: Self.width,
             contentHeight: ControlHUDView.contentHeight
         )
 
