@@ -93,6 +93,11 @@ final class TrackpadTouchMonitor {
     /// `bool MTDeviceIsBuiltIn(MTDeviceRef)`. Verified present on macOS 26.5,
     /// answering true for the trackpad and false for a Magic Mouse.
     private typealias DeviceIsBuiltIn = @convention(c) (UnsafeMutableRawPointer) -> Bool
+    /// `int MTDeviceGetFamilyID(MTDeviceRef, int*)`. Verified on macOS 26.5:
+    /// 105 for the built-in trackpad, 112 for a Magic Mouse.
+    private typealias DeviceGetFamilyID = @convention(c) (
+        UnsafeMutableRawPointer, UnsafeMutablePointer<Int32>
+    ) -> Int32
 
     /// `int (*)(MTDeviceRef, MTTouch*, int32_t, double, int32_t)`
     fileprivate typealias MTContactCallback = @convention(c) (
@@ -192,6 +197,7 @@ final class TrackpadTouchMonitor {
         surfaces.removeAll()
 
         let isBuiltIn: DeviceIsBuiltIn? = framework.function("MTDeviceIsBuiltIn")
+        let getFamilyID: DeviceGetFamilyID? = framework.function("MTDeviceGetFamilyID")
         var candidates: [Candidate] = []
 
         for index in 0..<CFArrayGetCount(list) {
@@ -203,12 +209,23 @@ final class TrackpadTouchMonitor {
             devices.append(device)
 
             guard let size = dimensions(of: device, framework: framework) else { continue }
-            surfaces.set(size, for: device)
-            candidates.append(Candidate(surface: size, isBuiltIn: isBuiltIn?(device) ?? false))
+
+            var family: Int32 = 0
+            if let getFamilyID, getFamilyID(device, &family) != 0 { family = 0 }
+
+            let candidate = Candidate(
+                surface: size,
+                isBuiltIn: isBuiltIn?(device) ?? false,
+                familyID: family
+            )
+            candidates.append(candidate)
+            surfaces.set(candidate, for: device)
+
             logger.info("""
-                Device \(index) is \(size.width, format: .fixed(precision: 1)) × \
-                \(size.height, format: .fixed(precision: 1)) mm, \
-                built in: \(isBuiltIn?(device) ?? false).
+                Device \(index): \(size.width, format: .fixed(precision: 1)) × \
+                \(size.height, format: .fixed(precision: 1)) mm, family \(family), \
+                built in \(candidate.isBuiltIn), \
+                \(candidate.isTrackpad ? "driving edge gestures" : "ignored: not a trackpad").
                 """)
         }
 
@@ -230,17 +247,55 @@ final class TrackpadTouchMonitor {
         logger.info("Touch monitor stopped.")
     }
 
-    /// One device's size and whether it is the built-in trackpad.
+    /// What is known about one multitouch device.
     struct Candidate: Equatable {
         var surface: TrackpadSurfaceSize
         var isBuiltIn: Bool
+        var familyID: Int32 = 0
+
+        /// Whether this device may drive edge gestures.
+        ///
+        /// Edge controls are a trackpad feature, and "multitouch device" is a
+        /// wider category than "trackpad": a Magic Mouse reports touches too,
+        /// and resting a palm near the top of one would otherwise change the
+        /// volume. Two tests, both of which a device has to pass:
+        ///
+        /// **It is not a known mouse.** Family 112 is the Magic Mouse on the
+        /// machine this was measured on. 113 is its sibling by every published
+        /// account and is *not* verified here — which is why it only ever adds
+        /// to the excluded list and never decides anything on its own.
+        ///
+        /// **Its surface is landscape.** A trackpad is wider than it is tall
+        /// and a mouse's touch surface is taller than it is wide, because one
+        /// sits under the fingers and the other under the palm. This is a fact
+        /// about the shape of the hardware rather than a table of model
+        /// numbers, so it holds for devices that did not exist when this was
+        /// written.
+        ///
+        /// Both tests are framed to exclude rather than to admit: a device
+        /// this does not recognise is treated as a trackpad. Breaking edge
+        /// controls on a Magic Trackpad — external, `isBuiltIn` false, and a
+        /// family ID nobody here has seen — would be a worse failure than a
+        /// mouse that still works.
+        var isTrackpad: Bool {
+            guard !Self.mouseFamilyIDs.contains(familyID) else { return false }
+            guard surface.width > 0, surface.height > 0 else { return true }
+            return surface.width > surface.height
+        }
+
+        /// Verified: 112 is the Magic Mouse attached to the machine this was
+        /// written on. 113 is documented as the second generation everywhere
+        /// it is discussed, and is unverified.
+        private static let mouseFamilyIDs: Set<Int32> = [112, 113]
     }
 
     /// The device the settings panel should draw.
     ///
-    /// The built-in trackpad wins outright. Failing that, the largest surface:
-    /// on a desktop with both a Magic Trackpad and a Magic Mouse attached, the
-    /// trackpad is the bigger of the two by a wide margin.
+    /// Trackpads only, since they are the only devices that can drive an edge
+    /// gesture; drawing the one thing the user cannot use would be a strange
+    /// thing for the panel to do. The built-in one wins outright, failing that
+    /// the largest — on a desktop with a Magic Trackpad and a Magic Mouse
+    /// attached, the trackpad is the bigger by a wide margin anyway.
     ///
     /// Taking whichever device happened to be last in the framework's list —
     /// which is what this used to do — drew the settings diagram at the size
@@ -248,10 +303,12 @@ final class TrackpadTouchMonitor {
     /// came out portrait and dragged the settings window down the screen with
     /// it.
     static func primarySurface(among candidates: [Candidate]) -> TrackpadSurfaceSize {
-        if let builtIn = candidates.first(where: \.isBuiltIn) {
+        let trackpads = candidates.filter(\.isTrackpad)
+
+        if let builtIn = trackpads.first(where: \.isBuiltIn) {
             return builtIn.surface
         }
-        let largest = candidates.max { left, right in
+        let largest = trackpads.max { left, right in
             left.surface.width * left.surface.height < right.surface.width * right.surface.height
         }
         return largest?.surface ?? .fallback
@@ -283,6 +340,13 @@ final class TrackpadTouchMonitor {
         count: Int32
     ) {
         guard !layoutLooksBroken else { return }
+
+        // Edge controls are a trackpad feature. A Magic Mouse reports touches
+        // too, and a palm resting near the top of one would otherwise be a
+        // finger at the top edge of a very small trackpad. Dropped here rather
+        // than in the gesture engine, which is deliberately ignorant of
+        // hardware: the monitor is what knows one device from another.
+        guard surfaces.isTrackpad(device) else { return }
 
         var decoded: [TrackpadTouch] = []
         decoded.reserveCapacity(Int(count))
@@ -377,7 +441,7 @@ private let trackpadContactCallback: TrackpadTouchMonitor.MTContactCallback = { 
 private final class SurfaceStore {
 
     private let lock = NSLock()
-    private var byDevice: [UnsafeMutableRawPointer: TrackpadSurfaceSize] = [:]
+    private var byDevice: [UnsafeMutableRawPointer: TrackpadTouchMonitor.Candidate] = [:]
     private var primarySurface: TrackpadSurfaceSize = .fallback
 
     var primary: TrackpadSurfaceSize {
@@ -393,10 +457,10 @@ private final class SurfaceStore {
         }
     }
 
-    func set(_ surface: TrackpadSurfaceSize, for device: UnsafeMutableRawPointer) {
+    func set(_ candidate: TrackpadTouchMonitor.Candidate, for device: UnsafeMutableRawPointer) {
         lock.lock()
         defer { lock.unlock() }
-        byDevice[device] = surface
+        byDevice[device] = candidate
     }
 
     /// The size of the device a frame came from, falling back to the primary
@@ -404,8 +468,18 @@ private final class SurfaceStore {
     func surface(for device: UnsafeMutableRawPointer?) -> TrackpadSurfaceSize {
         lock.lock()
         defer { lock.unlock() }
-        guard let device, let surface = byDevice[device] else { return primarySurface }
-        return surface
+        guard let device, let candidate = byDevice[device] else { return primarySurface }
+        return candidate.surface
+    }
+
+    /// Whether frames from this device count as trackpad gestures. A device
+    /// that never reported its dimensions is not recognised either way, and is
+    /// let through rather than silently switched off.
+    func isTrackpad(_ device: UnsafeMutableRawPointer?) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        guard let device, let candidate = byDevice[device] else { return true }
+        return candidate.isTrackpad
     }
 
     func removeAll() {
