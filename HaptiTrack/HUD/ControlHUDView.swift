@@ -117,6 +117,7 @@ struct ControlHUDView: View {
     }
 }
 
+#if canImport(PreviewsMacros)
 #Preview {
     let model = ControlHUDModel()
     model.presentation = ControlHUDPresentation(
@@ -128,3 +129,4 @@ struct ControlHUDView: View {
         .frame(width: 260, height: 78)
         .background(Color.gray)
 }
+#endif

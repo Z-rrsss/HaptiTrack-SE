@@ -1,3 +1,4 @@
+import CoreGraphics
 import Foundation
 
 /// Stable identifier for a control, used to persist an edge's assignment.
@@ -57,6 +58,10 @@ struct ControlAdjustment: Equatable {
 
     /// Where the control ended up, in `0...1`.
     var value: Double
+
+    /// The display this adjustment belongs to, when the control is
+    /// display-specific. The HUD uses it to appear on the same screen.
+    var displayID: CGDirectDisplayID? = nil
 }
 
 /// Something with a single continuous value that an edge gesture can drive.
@@ -94,10 +99,23 @@ protocol AdjustableControl: AnyObject {
 
     /// The current value, always clamped to `0...1`.
     var value: Double { get set }
+
+    /// Called once when an edge starts and ends driving this control.
+    /// Display-specific controls use the pair to keep one target locked for
+    /// the whole sweep, even if moving a finger also moves the pointer.
+    func beginAdjustment()
+    func endAdjustment()
+
+    /// The screen associated with the active adjustment, for HUD placement.
+    var adjustmentDisplayID: CGDirectDisplayID? { get }
 }
 
 extension AdjustableControl {
     var quantum: Double { 1.0 / 16.0 }
+    var adjustmentDisplayID: CGDirectDisplayID? { nil }
+
+    func beginAdjustment() {}
+    func endAdjustment() {}
 
     /// Most controls are a property of the Mac rather than of what is attached
     /// to it, so they are always on offer; only their availability moves.

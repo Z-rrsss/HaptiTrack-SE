@@ -52,7 +52,7 @@ final class ControlHUDController {
         let panel = panel ?? makePanel()
         self.panel = panel
 
-        position(panel)
+        position(panel, displayID: presentation.displayID)
         model.presentation = presentation
 
         if !model.isExpanded {
@@ -121,8 +121,10 @@ final class ControlHUDController {
     /// user moves to an external display, and it differs between Macs. Nothing
     /// here carries a width of its own — the notch this machine actually has
     /// is what the HUD is.
-    private func position(_ panel: NSPanel) {
-        guard let screen = NSScreen.main else { return }
+    private func position(_ panel: NSPanel, displayID: CGDirectDisplayID?) {
+        let targetScreen = displayID.flatMap(DisplayTarget.screen(for:))
+            ?? DisplayTarget.screenUnderPointer()
+        guard let screen = targetScreen else { return }
 
         let notch = NotchGeometry.forScreen(screen)
         let frame = notch.hudFrame(

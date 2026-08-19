@@ -11,6 +11,8 @@ private final class MockControl: AdjustableControl {
     var isAvailable = true
     var quantum: Double
     var writes: [Double] = []
+    var beginAdjustmentCount = 0
+    var endAdjustmentCount = 0
 
     var value: Double {
         get { storedValue }
@@ -26,6 +28,14 @@ private final class MockControl: AdjustableControl {
         self.identifier = identifier
         self.storedValue = value
         self.quantum = quantum
+    }
+
+    func beginAdjustment() {
+        beginAdjustmentCount += 1
+    }
+
+    func endAdjustment() {
+        endAdjustmentCount += 1
     }
 }
 
@@ -54,10 +64,12 @@ final class EdgeGestureEngineTests: XCTestCase {
     private func makeEngine(
         zones: [EdgeZoneConfiguration] = [
             EdgeZoneConfiguration(edge: .right, control: .volume, margin: 10, travelForFullRange: 50)
-        ]
+        ],
+        requiresTwoFingers: Bool = false
     ) -> EdgeGestureEngine {
         EdgeGestureEngine(
             zones: zones,
+            requiresTwoFingers: requiresTwoFingers,
             controlProvider: { [control] identifier in
                 identifier == control?.identifier ? control : nil
             },
@@ -69,6 +81,32 @@ final class EdgeGestureEngineTests: XCTestCase {
                 self?.adjustments.append(adjustment)
             }
         )
+    }
+
+    private func twoTouches(
+        _ x: Double,
+        _ y: Double,
+        identifiers: (Int32, Int32) = (1, 2)
+    ) -> [TrackpadTouch] {
+        [
+            touch(x, y, identifier: identifiers.0),
+            touch(x - 0.01, y + 0.02, identifier: identifiers.1),
+        ]
+    }
+
+    private func slideTwoFingers(
+        _ engine: EdgeGestureEngine,
+        from start: CGPoint,
+        to end: CGPoint,
+        steps: Int = 20,
+        interval: TimeInterval = 0.02
+    ) {
+        for step in 0...steps {
+            let progress = Double(step) / Double(steps)
+            let x = Double(start.x) + (Double(end.x) - Double(start.x)) * progress
+            let y = Double(start.y) + (Double(end.y) - Double(start.y)) * progress
+            engine.consume(frame(twoTouches(x, y), at: Double(step) * interval))
+        }
     }
 
     private func frame(
@@ -129,6 +167,63 @@ final class EdgeGestureEngineTests: XCTestCase {
 
         XCTAssertTrue(engine.isTracking)
         XCTAssertEqual(engine.trackedEdge, .right)
+        XCTAssertEqual(control.beginAdjustmentCount, 1)
+    }
+
+    func testPreventionRejectsOneFinger() {
+        let engine = makeEngine(requiresTwoFingers: true)
+
+        engine.consume(frame([touch(0.95, 0.5)], at: 0))
+
+        XCTAssertFalse(engine.isTracking)
+        XCTAssertEqual(control.beginAdjustmentCount, 0)
+    }
+
+    func testPreventionRequiresBothFingersInTheSameEdgeStrip() {
+        let engine = makeEngine(requiresTwoFingers: true)
+
+        engine.consume(frame([
+            touch(0.95, 0.5, identifier: 1),
+            touch(0.50, 0.5, identifier: 2),
+        ], at: 0))
+
+        XCTAssertFalse(engine.isTracking)
+    }
+
+    func testPreventionStartsWithTwoFingersOnTheEdge() {
+        let engine = makeEngine(requiresTwoFingers: true)
+
+        engine.consume(frame(twoTouches(0.95, 0.5), at: 0))
+
+        XCTAssertTrue(engine.isTracking)
+        XCTAssertEqual(engine.trackedEdge, .right)
+        XCTAssertEqual(control.beginAdjustmentCount, 1)
+    }
+
+    func testPreventionUsesTwoFingerCentroidToAdjust() {
+        let engine = makeEngine(requiresTwoFingers: true)
+        control.value = 0.5
+        control.writes = []
+
+        slideTwoFingers(
+            engine,
+            from: CGPoint(x: 0.95, y: 0.3),
+            to: CGPoint(x: 0.95, y: 0.7)
+        )
+
+        XCTAssertGreaterThan(control.value, 0.5)
+        XCTAssertFalse(control.writes.isEmpty)
+    }
+
+    func testChangingPreventionModeCancelsTheCurrentGesture() {
+        let engine = makeEngine()
+        engine.consume(frame([touch(0.95, 0.5)], at: 0))
+        XCTAssertTrue(engine.isTracking)
+
+        engine.requiresTwoFingers = true
+
+        XCTAssertFalse(engine.isTracking)
+        XCTAssertEqual(control.endAdjustmentCount, 1)
     }
 
     func testUnassignedEdgeIsIgnored() {
@@ -264,6 +359,29 @@ final class EdgeGestureEngineTests: XCTestCase {
         XCTAssertFalse(engine.isTracking, "Two fingers is a scroll, not an edge gesture")
     }
 
+    func testPreventionCancelsWhenAThirdFingerTouches() {
+        let engine = makeEngine(requiresTwoFingers: true)
+        engine.consume(frame(twoTouches(0.95, 0.3), at: 0))
+        XCTAssertTrue(engine.isTracking)
+
+        engine.consume(frame(twoTouches(0.95, 0.35) + [
+            touch(0.75, 0.35, identifier: 3),
+        ], at: 0.02))
+
+        XCTAssertFalse(engine.isTracking)
+    }
+
+    func testPreventionKeepsTrackingIfContactOrderChanges() {
+        let engine = makeEngine(requiresTwoFingers: true)
+        engine.consume(frame(twoTouches(0.95, 0.3), at: 0))
+
+        let reordered = twoTouches(0.95, 0.35).reversed()
+        engine.consume(frame(Array(reordered), at: 0.02))
+
+        XCTAssertTrue(engine.isTracking)
+        XCTAssertEqual(control.beginAdjustmentCount, 1)
+    }
+
     func testLiftingTheFingerEndsTheGesture() {
         let engine = makeEngine()
         engine.consume(frame([touch(0.95, 0.3)], at: 0))
@@ -307,6 +425,7 @@ final class EdgeGestureEngineTests: XCTestCase {
         engine.reset()
 
         XCTAssertFalse(engine.isTracking)
+        XCTAssertEqual(control.endAdjustmentCount, 1)
     }
 
     // MARK: - Reporting what moved

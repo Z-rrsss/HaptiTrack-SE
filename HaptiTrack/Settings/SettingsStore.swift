@@ -21,6 +21,7 @@ final class SettingsStore: ObservableObject {
         static let isMomentumEnabled = "scrollHaptics.momentumEnabled"
         static let respondsToMouseWheel = "scrollHaptics.respondsToMouseWheel"
         static let areEdgeControlsEnabled = "edgeControls.enabled"
+        static let requiresTwoFingers = "edgeControls.requiresTwoFingers"
         static let edgeZones = "edgeControls.zones"
     }
 
@@ -83,6 +84,13 @@ final class SettingsStore: ObservableObject {
         didSet { defaults.set(areEdgeControlsEnabled, forKey: Key.areEdgeControlsEnabled) }
     }
 
+    /// Safety switch for edge controls. When enabled, both fingers must begin
+    /// inside the same edge strip; ordinary one-finger pointing cannot trigger
+    /// an adjustment.
+    @Published var requiresTwoFingersForEdgeControls: Bool {
+        didSet { defaults.set(requiresTwoFingersForEdgeControls, forKey: Key.requiresTwoFingers) }
+    }
+
     /// One entry per edge, always all four and always in `TrackpadEdge.allCases`
     /// order. Stored as JSON rather than as a flat pile of keys so that adding
     /// a knob to `EdgeZoneConfiguration` does not mean inventing four more
@@ -104,6 +112,7 @@ final class SettingsStore: ObservableObject {
             Key.isMomentumEnabled: true,
             Key.respondsToMouseWheel: false,
             Key.areEdgeControlsEnabled: true,
+            Key.requiresTwoFingers: true,
         ])
 
         isScrollHapticsEnabled = defaults.bool(forKey: Key.isEnabled)
@@ -115,6 +124,7 @@ final class SettingsStore: ObservableObject {
         isMomentumHapticsEnabled = defaults.bool(forKey: Key.isMomentumEnabled)
         respondsToMouseWheel = defaults.bool(forKey: Key.respondsToMouseWheel)
         areEdgeControlsEnabled = defaults.bool(forKey: Key.areEdgeControlsEnabled)
+        requiresTwoFingersForEdgeControls = defaults.bool(forKey: Key.requiresTwoFingers)
         edgeZones = Self.decodeZones(from: defaults.data(forKey: Key.edgeZones))
     }
 
@@ -170,6 +180,7 @@ final class SettingsStore: ObservableObject {
         isMomentumHapticsEnabled = true
         respondsToMouseWheel = false
         areEdgeControlsEnabled = true
+        requiresTwoFingersForEdgeControls = true
         edgeZones = EdgeZoneConfiguration.defaults()
     }
 }

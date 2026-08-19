@@ -201,8 +201,10 @@ struct TrackpadDiagram: View {
     }
 }
 
+#if canImport(PreviewsMacros)
 #Preview {
     TrackpadDiagram(zones: EdgeZoneConfiguration.defaults(), selectedEdge: .right)
         .frame(width: 260)
         .padding()
 }
+#endif

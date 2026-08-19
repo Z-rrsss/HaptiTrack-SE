@@ -15,7 +15,7 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "AA0000000000000000000010"
-               BuildableName = "HaptiTrack.app"
+               BuildableName = "HaptiTrack SE.app"
                BlueprintName = "HaptiTrack"
                ReferencedContainer = "container:HaptiTrack.xcodeproj">
             </BuildableReference>
@@ -55,7 +55,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "AA0000000000000000000010"
-            BuildableName = "HaptiTrack.app"
+            BuildableName = "HaptiTrack SE.app"
             BlueprintName = "HaptiTrack"
             ReferencedContainer = "container:HaptiTrack.xcodeproj">
          </BuildableReference>
@@ -72,7 +72,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "AA0000000000000000000010"
-            BuildableName = "HaptiTrack.app"
+            BuildableName = "HaptiTrack SE.app"
             BlueprintName = "HaptiTrack"
             ReferencedContainer = "container:HaptiTrack.xcodeproj">
          </BuildableReference>

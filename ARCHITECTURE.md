@@ -1,6 +1,6 @@
 # Architecture
 
-This document covers how HaptiTrack is put together internally: the code
+This document covers how HaptiTrack SE is put together internally: the code
 layout, the design of the notch HUD and launch animation, and why the app
 needs private frameworks at all. If you just want to install and use the app,
 you don't need any of this — see the main [README](README.md) instead.
@@ -34,11 +34,17 @@ button. Anything that can express itself as a `0...1` value can be assigned to
 an edge; the gesture code knows nothing about audio or displays.
 
 **`isAvailable` and `isSupported`** are two different questions a control has to
-answer. Availability moves with whatever is plugged in — an external display can
-take brightness away and give it back — so an unavailable control stays in the
-assignment picker with a note explaining itself. Support is a fact about the
+answer. Availability moves with whatever is plugged in. Brightness remains
+available because per-display software dimming is the final fallback;
+hardware-dependent controls can still disappear. Support is a fact about the
 Mac: a desktop will never grow a backlit keyboard, so that control is left out
 of the picker entirely rather than offered and then explained away.
+
+Brightness uses three replaceable backends. `BrightnessControl` locks the
+display under the pointer for one gesture, tries macOS native control first,
+then DDC/CI hardware control, and finally a click-through software dimming
+panel. The same display identifier is passed to the HUD so feedback appears on
+the screen being changed.
 
 Haptic output likewise sits behind a `HapticEngine` protocol. The shipping
 backend uses the public `NSHapticFeedbackManager` API; the protocol exists so an
@@ -79,10 +85,10 @@ Accessibility → Display skips it entirely.
 Module 1 uses nothing but public API. Module 2 cannot: macOS exposes no public
 way to read absolute finger positions, to set the brightness of a built-in
 display, to change the Night Shift colour temperature, or to move the keyboard
-backlight. HaptiTrack uses the same private frameworks every trackpad and
-brightness utility on macOS relies on — `MultitouchSupport`,
-`DisplayServices`/`CoreDisplay` and `CoreBrightness` (both `CBBlueLightClient`
-for Night Shift and `KeyboardBrightnessClient` for the backlight).
+backlight. HaptiTrack SE uses private macOS entry points in
+`MultitouchSupport`, `DisplayServices`/`CoreDisplay` and `CoreBrightness`.
+External DDC/CI on Apple Silicon uses the IOAV I²C transport exported by
+CoreDisplay. Software dimming itself uses ordinary AppKit windows.
 
 This is a deliberate, documented trade-off rather than an accident:
 
@@ -93,5 +99,5 @@ This is a deliberate, documented trade-off rather than an accident:
 - each one sits behind a protocol (`AdjustableControl`, `TrackpadTouchMonitor`)
   so replacing it later touches one file.
 
-It also means HaptiTrack could never ship on the App Store, which is fine —
+It also means HaptiTrack SE could never ship on the App Store, which is fine —
 it is not headed there.

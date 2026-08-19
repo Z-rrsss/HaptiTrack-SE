@@ -1,3 +1,4 @@
+import CoreGraphics
 import Foundation
 
 /// What the HUD says: a name, a level, and an icon to put in front of them.
@@ -9,15 +10,22 @@ struct ControlHUDPresentation: Equatable {
 
     var title: String
     var symbolName: String
+    var displayID: CGDirectDisplayID?
 
     /// Always `0...1`. Clamped here rather than trusted, because a control that
     /// reports something odd should make the bar sit at an end, not draw past
     /// the end of the HUD.
     private(set) var value: Double
 
-    init(title: String, symbolName: String, value: Double) {
+    init(
+        title: String,
+        symbolName: String,
+        value: Double,
+        displayID: CGDirectDisplayID? = nil
+    ) {
         self.title = title
         self.symbolName = symbolName
+        self.displayID = displayID
         self.value = value.isFinite ? value.clamped(to: 0...1) : 0
     }
 
@@ -25,7 +33,8 @@ struct ControlHUDPresentation: Equatable {
         self.init(
             title: adjustment.displayName,
             symbolName: adjustment.identifier.symbolName,
-            value: adjustment.value
+            value: adjustment.value,
+            displayID: adjustment.displayID
         )
     }
 

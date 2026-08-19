@@ -3,9 +3,10 @@ import OSLog
 
 /// A private system framework opened at runtime.
 ///
-/// HaptiTrack needs three things macOS exposes no public API for: raw
-/// multitouch positions, internal display brightness, and the Night Shift
-/// colour temperature. All three live in private frameworks.
+/// HaptiTrack needs several things macOS exposes no public API for: raw
+/// multitouch positions, display brightness and DDC transport, Night Shift
+/// colour temperature, and keyboard backlight control. They live in private
+/// frameworks.
 ///
 /// Every one of them is reached through `dlopen`/`dlsym` rather than by linking
 /// against the framework, which matters for more than tidiness: a linked
@@ -15,8 +16,8 @@ import OSLog
 /// and carries on.
 ///
 /// None of this is supported by Apple, and none of it is App Store material.
-/// It is deliberate: HaptiTrack is a private, personal build, and the features
-/// that need these frameworks cannot be written any other way.
+/// It is deliberate, documented and isolated behind replaceable interfaces.
+/// These features cannot be written with Apple's public macOS APIs.
 struct PrivateFramework {
 
     private static let logger = Logger(subsystem: AppInfo.subsystem, category: "PrivateFramework")

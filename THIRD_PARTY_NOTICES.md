@@ -1,7 +1,20 @@
+# Third-party notices
+
+HaptiTrack SE is based on
+[HaptiTrack](https://github.com/andrea-depasquale/HaptiTrack) by Andrea De
+Pasquale and retains its MIT license and copyright notice in `LICENSE`.
+
+The DDC/CI packet construction, IOAV transport calls, retry timings and
+IORegistry matching logic in HaptiTrack SE were adapted from compatibility work
+in [AppleSiliconDDC](https://github.com/waydabber/AppleSiliconDDC) by Istvan T.
+HaptiTrack SE does not vendor that package as a dependency. Its copyright and
+full MIT license are preserved below for the adapted portions.
+
+## AppleSiliconDDC
+
 MIT License
 
-Copyright (c) 2026 Andrea De Pasquale
-Copyright (c) 2026 HaptiTrack SE contributors
+Copyright (c) 2021 Istvan T.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal

@@ -38,6 +38,7 @@ playground.xcworkspace
 .swiftpm/
 Packages/
 Package.resolved
+swift-module-cache/
 
 # CocoaPods / Carthage (not used, kept for safety)
 Pods/

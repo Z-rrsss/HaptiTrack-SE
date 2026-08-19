@@ -64,6 +64,7 @@ final class EdgeControlsController: ObservableObject {
         // and the haptic engine directly: that is the seam the tests replace.
         self.engine = EdgeGestureEngine(
             zones: settings.edgeZones,
+            requiresTwoFingers: settings.requiresTwoFingersForEdgeControls,
             controlProvider: { [registry] identifier in registry.control(for: identifier) },
             onTick: { [haptics] intensity in haptics.perform(intensity) },
             // The engine runs on the main thread — the touch monitor hands its
@@ -86,6 +87,7 @@ final class EdgeControlsController: ObservableObject {
 
     func applySettings() {
         engine.zones = settings.edgeZones
+        engine.requiresTwoFingers = settings.requiresTwoFingersForEdgeControls
 
         if settings.areEdgeControlsEnabled {
             start()

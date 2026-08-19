@@ -98,7 +98,17 @@ final class SettingsStoreTests: XCTestCase {
         let settings = SettingsStore(defaults: defaults)
 
         XCTAssertTrue(settings.areEdgeControlsEnabled)
+        XCTAssertTrue(settings.requiresTwoFingersForEdgeControls)
         XCTAssertEqual(settings.edgeZones, EdgeZoneConfiguration.defaults())
+    }
+
+    func testAccidentalActivationProtectionSurvivesARestart() {
+        let settings = SettingsStore(defaults: defaults)
+        settings.requiresTwoFingersForEdgeControls = false
+
+        let reloaded = SettingsStore(defaults: defaults)
+
+        XCTAssertFalse(reloaded.requiresTwoFingersForEdgeControls)
     }
 
     func testEdgeZoneChangesSurviveARestart() {
@@ -190,10 +200,12 @@ final class SettingsStoreTests: XCTestCase {
         var zone = settings.zone(for: .right)
         zone.control = .none
         settings.updateZone(zone)
+        settings.requiresTwoFingersForEdgeControls = false
 
         settings.resetToDefaults()
 
         XCTAssertEqual(settings.edgeZones, EdgeZoneConfiguration.defaults())
+        XCTAssertTrue(settings.requiresTwoFingersForEdgeControls)
     }
 
     func testAttenuationIsOneStepSofter() {

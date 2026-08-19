@@ -19,7 +19,7 @@ struct TrackpadSurfaceSize: Equatable {
 /// One finger in one frame.
 struct TrackpadTouch: Equatable {
     /// Stable for the life of a single contact, which is what lets a gesture
-    /// follow one finger and ignore the others.
+    /// keep following the same two fingers even if frame ordering changes.
     var identifier: Int32
     /// Normalised to `0...1`, origin at the bottom-left of the surface.
     var position: CGPoint

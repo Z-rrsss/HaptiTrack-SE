@@ -22,6 +22,24 @@ struct EdgeSettingsView: View {
             Section {
                 Toggle("Edge controls", isOn: $settings.areEdgeControlsEnabled)
                 statusRow
+
+                // Keep the explanation inside the setting's row. A Form
+                // otherwise inserts a separator between the toggle and the
+                // text that explains it.
+                VStack(alignment: .leading, spacing: 8) {
+                    Toggle(
+                        "Prevent accidental activation",
+                        isOn: $settings.requiresTwoFingersForEdgeControls
+                    )
+                    .disabled(!settings.areEdgeControlsEnabled)
+
+                    Text(settings.requiresTwoFingersForEdgeControls
+                         ? "Both fingers must start inside the same edge strip."
+                         : "One finger inside an edge strip can adjust its control.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
 
             Section {
@@ -76,27 +94,44 @@ struct EdgeSettingsView: View {
             // registry rather than from the enum. Whatever the edge is set to
             // now is always in it, so an assignment this machine cannot drive
             // is shown rather than silently swapped for something else.
-            Picker("Controls", selection: zone.control) {
-                ForEach(edgeControls.assignableControls(including: zone.wrappedValue.control)) { identifier in
-                    Text(identifier.displayName).tag(identifier)
+            // The picker and its contextual explanation are one setting. Keep
+            // them in one Form row so no separator appears between them.
+            VStack(alignment: .leading, spacing: 10) {
+                Picker("Controls", selection: zone.control) {
+                    ForEach(edgeControls.assignableControls(including: zone.wrappedValue.control)) { identifier in
+                        Text(identifier.displayName).tag(identifier)
+                    }
                 }
-            }
 
-            if !edgeControls.isControlAvailable(zone.wrappedValue.control) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Label("This control isn't available right now.", systemImage: "exclamationmark.triangle")
-                    // Availability is not a fixed property of the Mac: an
-                    // external display used as the audio output often exposes
-                    // no volume at all, brightness follows whichever display is
-                    // currently the main one, and a keyboard with a backlight
-                    // can be swapped for one without.
-                    Text("Availability depends on the display, audio device and keyboard in use. "
-                         + "Reopen this panel after switching devices.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+                if zone.wrappedValue.control == .brightness {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Label("Follows the pointer's display", systemImage: "display.2")
+                        Text("Uses macOS brightness control first, then DDC/CI on compatible external "
+                             + "displays. If neither hardware path works, a click-through software "
+                             + "dimming layer is used on that display only.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .font(.callout)
                 }
-                .font(.callout)
+
+                if !edgeControls.isControlAvailable(zone.wrappedValue.control) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Label("This control isn't available right now.", systemImage: "exclamationmark.triangle")
+                        // Availability is not a fixed property of the Mac: an
+                        // external display used as the audio output often exposes
+                        // no volume at all, brightness follows whichever display is
+                        // currently the main one, and a keyboard with a backlight
+                        // can be swapped for one without.
+                        Text("Availability depends on the display, audio device and keyboard in use. "
+                             + "Reopen this panel after switching devices.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .font(.callout)
+                }
             }
 
             if zone.wrappedValue.isEnabled {
@@ -104,8 +139,7 @@ struct EdgeSettingsView: View {
                     title: "Active strip",
                     value: zone.margin,
                     range: EdgeZoneConfiguration.marginRange,
-                    caption: "How far in from the \(edge.displayName.lowercased()) edge a finger "
-                        + "counts as being on the strip. \(edge.gestureDescription) inside it."
+                    caption: activeStripCaption(for: edge)
                 )
 
                 millimetreSlider(
@@ -153,6 +187,14 @@ struct EdgeSettingsView: View {
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
+    }
+
+    private func activeStripCaption(for edge: TrackpadEdge) -> String {
+        let requirement = settings.requiresTwoFingersForEdgeControls
+            ? "Both fingers must begin inside it."
+            : "Begin with one finger inside it."
+        return "How far in from the \(edge.displayName.lowercased()) edge the active strip reaches. "
+            + requirement + " \(edge.gestureDescription)."
     }
 
     // MARK: - Status

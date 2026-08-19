@@ -1,0 +1,55 @@
+name: Bug report
+description: Report a reproducible problem in HaptiTrack SE
+title: "[Bug]: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Do not include display serial numbers, usernames or other private device information.
+  - type: input
+    id: version
+    attributes:
+      label: HaptiTrack SE version
+      placeholder: 1.2.0 (4)
+    validations:
+      required: true
+  - type: input
+    id: macos
+    attributes:
+      label: macOS and Mac model
+      placeholder: macOS 15.6, MacBook Pro M4
+    validations:
+      required: true
+  - type: textarea
+    id: setup
+    attributes:
+      label: Display and connection setup
+      description: For brightness issues, include display model, cable, port, dock or adapter, and whether DDC/CI is enabled.
+    validations:
+      required: false
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: "1. Assign Brightness to the right edge\n2. Move the pointer..."
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: I closed other display-control utilities before reproducing a DDC problem.
+        - label: I removed private identifiers from logs and screenshots.

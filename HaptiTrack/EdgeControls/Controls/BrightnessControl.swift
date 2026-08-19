@@ -2,103 +2,154 @@ import CoreGraphics
 import Foundation
 import OSLog
 
-/// Built-in display backlight.
+/// Brightness of the display under the pointer when an edge gesture begins.
 ///
-/// ⚠️ **Private API.** Apple ships no public way to set the brightness of an
-/// internal display — `IODisplaySetFloatParameter` stopped working on Apple
-/// silicon, and there has never been a documented replacement. This uses the
-/// same two private entry points every brightness utility on macOS relies on:
+/// The control chooses one path per gesture:
 ///
-///   - `DisplayServices.framework` — `DisplayServicesGetBrightness`,
-///     `DisplayServicesSetBrightness`, `DisplayServicesCanChangeBrightness`.
-///     This is the primary path; it is what the brightness keys drive.
-///   - `CoreDisplay.framework` — `CoreDisplay_Display_GetUserBrightness` /
-///     `SetUserBrightness`, used as a fallback.
+/// 1. Apple's DisplayServices/CoreDisplay path.
+/// 2. DDC/CI hardware brightness for compatible external displays.
+/// 3. A click-through per-screen software dimming panel.
 ///
-/// Both are resolved with `dlopen`/`dlsym` rather than linked, so a macOS
-/// release that removes or renames them degrades to "control unavailable"
-/// instead of refusing to launch the app. That, plus `AdjustableControl` in
-/// front, is what makes this replaceable: when it breaks, only this file has to
-/// change.
-///
-/// Verified present on macOS 26.5 (`DisplayServicesGetBrightness` returned a
-/// live value). `DisplayServicesBrightnessChanged`, which some older utilities
-/// call to refresh the on-screen HUD, is *not* exported on this release, so
-/// changing brightness this way updates the display without showing the HUD.
+/// The target and the chosen path stay fixed until the fingers lift, so moving
+/// the pointer cannot switch screens or mix hardware and software values in the
+/// middle of one sweep.
 final class BrightnessControl: AdjustableControl {
 
-    private typealias GetBrightness = @convention(c) (CGDirectDisplayID, UnsafeMutablePointer<Float>) -> Int32
-    private typealias SetBrightness = @convention(c) (CGDirectDisplayID, Float) -> Int32
-    private typealias CanChangeBrightness = @convention(c) (CGDirectDisplayID) -> Bool
-    private typealias GetUserBrightness = @convention(c) (CGDirectDisplayID) -> Double
-    private typealias SetUserBrightness = @convention(c) (CGDirectDisplayID, Double) -> Int32
+    private struct Session {
+        var displayID: CGDirectDisplayID
+        var method: BrightnessControlMethod
+        var value: Double
+    }
 
-    private static let displayServicesPath =
-        "/System/Library/PrivateFrameworks/DisplayServices.framework/DisplayServices"
-    private static let coreDisplayPath =
-        "/System/Library/Frameworks/CoreDisplay.framework/CoreDisplay"
-
+    private let native: HardwareBrightnessServicing
+    private let ddc: HardwareBrightnessServicing
+    private let software: SoftwareDimmingServicing
+    private let displayResolver: () -> CGDirectDisplayID
     private let logger = Logger(subsystem: AppInfo.subsystem, category: "BrightnessControl")
 
-    private let getBrightness: GetBrightness?
-    private let setBrightness: SetBrightness?
-    private let canChangeBrightness: CanChangeBrightness?
-    private let getUserBrightness: GetUserBrightness?
-    private let setUserBrightness: SetUserBrightness?
+    private var session: Session?
 
     let identifier: ControlIdentifier = .brightness
     let displayName = "Brightness"
-
-    /// Matches the sixteen steps the brightness keys move through.
     let quantum: Double = 1.0 / 16.0
 
-    init() {
-        let displayServices = PrivateFramework(path: Self.displayServicesPath)
-        let coreDisplay = PrivateFramework(path: Self.coreDisplayPath)
+    init(
+        native: HardwareBrightnessServicing = NativeDisplayBrightnessService(),
+        ddc: HardwareBrightnessServicing = DDCBrightnessService(),
+        software: SoftwareDimmingServicing = SoftwareDimmingController(),
+        displayResolver: @escaping () -> CGDirectDisplayID = DisplayTarget.displayUnderPointer
+    ) {
+        self.native = native
+        self.ddc = ddc
+        self.software = software
+        self.displayResolver = displayResolver
+    }
 
-        getBrightness = displayServices?.function("DisplayServicesGetBrightness")
-        setBrightness = displayServices?.function("DisplayServicesSetBrightness")
-        canChangeBrightness = displayServices?.function("DisplayServicesCanChangeBrightness")
-        getUserBrightness = coreDisplay?.function("CoreDisplay_Display_GetUserBrightness")
-        setUserBrightness = coreDisplay?.function("CoreDisplay_Display_SetUserBrightness")
+    var isAvailable: Bool {
+        software.isAvailable(for: displayResolver())
+    }
 
-        if setBrightness == nil && setUserBrightness == nil {
-            logger.error("No usable brightness entry point on this macOS release.")
+    var adjustmentDisplayID: CGDirectDisplayID? { session?.displayID }
+
+    /// Exposed internally for diagnostics and unit tests; it is nil between
+    /// gestures because the next screen may need a different path.
+    var activeMethod: BrightnessControlMethod? { session?.method }
+
+    func beginAdjustment() {
+        guard session == nil else { return }
+        let displayID = displayResolver()
+
+        if let value = native.readBrightness(for: displayID) {
+            software.clearDimming(for: displayID)
+            session = Session(displayID: displayID, method: .native, value: value)
+            return
+        }
+
+        if let value = ddc.readBrightness(for: displayID) {
+            software.clearDimming(for: displayID)
+            session = Session(displayID: displayID, method: .ddc, value: value)
+            return
+        }
+
+        if software.isAvailable(for: displayID) {
+            session = Session(
+                displayID: displayID,
+                method: .software,
+                value: software.readBrightness(for: displayID).clamped(to: 0...1)
+            )
         }
     }
 
-    /// The display an edge gesture drives. The main display is the one the menu
-    /// bar is on, which is the one the user is looking at when they reach for
-    /// the trackpad.
-    private var display: CGDirectDisplayID { CGMainDisplayID() }
-
-    var isAvailable: Bool {
-        guard setBrightness != nil || setUserBrightness != nil else { return false }
-        guard let canChangeBrightness else { return true }
-        return canChangeBrightness(display)
+    func endAdjustment() {
+        session = nil
     }
 
     var value: Double {
         get {
-            if let getBrightness {
-                var brightness: Float = 0
-                if getBrightness(display, &brightness) == 0 {
-                    return Double(brightness).clamped(to: 0...1)
-                }
-            }
-            if let getUserBrightness {
-                return getUserBrightness(display).clamped(to: 0...1)
-            }
-            return 0
+            if let session { return session.value }
+
+            // This path is mainly for settings and diagnostics. The gesture
+            // engine always calls beginAdjustment() before reading the value.
+            let displayID = displayResolver()
+            if let value = native.readBrightness(for: displayID) { return value }
+            let softwareValue = software.readBrightness(for: displayID)
+            if softwareValue < 1 { return softwareValue }
+            return ddc.readBrightness(for: displayID) ?? 1
         }
         set {
-            let clamped = newValue.clamped(to: 0...1)
-            if let setBrightness, setBrightness(display, Float(clamped)) == 0 {
-                return
+            if session == nil { beginAdjustment() }
+            guard var current = session else { return }
+            let requested = newValue.clamped(to: 0...1)
+
+            switch current.method {
+            case .native:
+                if native.writeBrightness(requested, for: current.displayID) {
+                    current.value = requested
+                } else {
+                    current = fallBackFromNative(to: requested, session: current)
+                }
+
+            case .ddc:
+                if ddc.writeBrightness(requested, for: current.displayID) {
+                    current.value = requested
+                } else {
+                    current = fallBackToSoftware(requested, session: current)
+                }
+
+            case .software:
+                if software.writeBrightness(requested, for: current.displayID) {
+                    current.value = requested
+                }
             }
-            if let setUserBrightness {
-                _ = setUserBrightness(display, clamped)
-            }
+
+            session = current
         }
+    }
+
+    private func fallBackFromNative(to value: Double, session: Session) -> Session {
+        var updated = session
+
+        // A native service can disappear after a display wakes or changes
+        // mode. Give DDC one chance before switching to visual dimming.
+        if ddc.readBrightness(for: session.displayID) != nil,
+           ddc.writeBrightness(value, for: session.displayID) {
+            software.clearDimming(for: session.displayID)
+            updated.method = .ddc
+            updated.value = value
+            logger.notice("Native brightness failed; continued with DDC/CI.")
+            return updated
+        }
+
+        logger.notice("Native brightness failed; continued with software dimming.")
+        return fallBackToSoftware(value, session: session)
+    }
+
+    private func fallBackToSoftware(_ value: Double, session: Session) -> Session {
+        var updated = session
+        if software.writeBrightness(value, for: session.displayID) {
+            updated.method = .software
+            updated.value = value
+        }
+        return updated
     }
 }

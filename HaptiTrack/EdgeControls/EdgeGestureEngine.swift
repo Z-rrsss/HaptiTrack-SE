@@ -3,9 +3,10 @@ import Foundation
 
 /// Turns raw touch frames into control adjustments and haptic ticks.
 ///
-/// The engine owns the whole decision: which edge a finger started in, whether
-/// it is still there, how far it has travelled, where that puts the control and
-/// when a tick is due. It knows nothing about audio, displays or the trackpad
+/// The engine owns the whole decision: which edge the required contact or
+/// contacts started in, whether they are still there, how far their centre has
+/// travelled, where that puts the control and when a tick is due. It knows
+/// nothing about audio, displays or the trackpad
 /// framework — touches come in as values and the control is an
 /// `AdjustableControl`, which is what lets the whole thing be tested against a
 /// mock without any hardware.
@@ -31,10 +32,10 @@ final class EdgeGestureEngine {
     typealias AdjustmentHandler = (ControlAdjustment) -> Void
 
     private struct ActiveGesture {
-        var touchIdentifier: Int32
+        var touchIdentifiers: Set<Int32>
         var zone: EdgeZoneConfiguration
         var control: AdjustableControl
-        var lastPosition: CGPoint
+        var lastCentroid: CGPoint
         /// Continuous position in `0...1`, kept apart from the control's own
         /// value so the quantised steps never accumulate rounding drift.
         var value: Double
@@ -43,8 +44,8 @@ final class EdgeGestureEngine {
     }
 
     /// Once a gesture is under way the strip is treated as this much deeper, so
-    /// a finger that drifts a couple of millimetres inward while sliding does
-    /// not drop the gesture. Starting one still needs the real margin.
+    /// either finger can drift a couple of millimetres inward while sliding
+    /// without dropping the gesture. Starting still needs the real margin.
     private static let holdSlack: Double = 6
 
     /// Speed, in millimetres per second, past which ticks soften. A deliberate
@@ -54,6 +55,11 @@ final class EdgeGestureEngine {
 
     var zones: [EdgeZoneConfiguration]
     var isEnabled: Bool = true
+    var requiresTwoFingers: Bool {
+        didSet {
+            if requiresTwoFingers != oldValue { reset() }
+        }
+    }
 
     private let controlProvider: ControlProvider
     private let onTick: TickHandler
@@ -62,11 +68,13 @@ final class EdgeGestureEngine {
 
     init(
         zones: [EdgeZoneConfiguration] = EdgeZoneConfiguration.defaults(),
+        requiresTwoFingers: Bool = false,
         controlProvider: @escaping ControlProvider,
         onTick: @escaping TickHandler,
         onAdjust: @escaping AdjustmentHandler = { _ in }
     ) {
         self.zones = zones
+        self.requiresTwoFingers = requiresTwoFingers
         self.controlProvider = controlProvider
         self.onTick = onTick
         self.onAdjust = onAdjust
@@ -79,6 +87,7 @@ final class EdgeGestureEngine {
     var trackedEdge: TrackpadEdge? { gesture?.zone.edge }
 
     func reset() {
+        gesture?.control.endAdjustment()
         gesture = nil
     }
 
@@ -92,62 +101,77 @@ final class EdgeGestureEngine {
 
         let contacts = frame.touches.filter(\.isInContact)
 
-        // An edge gesture is a one-finger gesture, full stop. Two fingers is a
-        // scroll, three or four is a Mission Control swipe, and none of those
-        // should be moving the volume as a side effect. Requiring exactly one
-        // contact is what keeps edge controls out of the way of everything the
-        // trackpad already does.
-        guard contacts.count == 1, let touch = contacts.first else {
+        // Safety mode requires exactly two fingers; compatibility mode keeps
+        // the original one-finger gesture. Any other contact count cancels the
+        // adjustment, leaving system three- and four-finger gestures alone.
+        let requiredContactCount = requiresTwoFingers ? 2 : 1
+        guard contacts.count == requiredContactCount else {
             reset()
             return
         }
 
-        if let current = gesture, current.touchIdentifier == touch.identifier {
-            advance(current, with: touch, frame: frame)
+        let identifiers = Set(contacts.map(\.identifier))
+        guard identifiers.count == requiredContactCount else {
+            reset()
+            return
+        }
+
+        if let current = gesture, current.touchIdentifiers == identifiers {
+            advance(current, with: contacts, frame: frame)
         } else {
             reset()
-            begin(with: touch, frame: frame)
+            begin(with: contacts, frame: frame)
         }
     }
 
     // MARK: - Gesture lifecycle
 
-    private func begin(with touch: TrackpadTouch, frame: TrackpadTouchFrame) {
-        guard let zone = zones.first(where: {
-            $0.isEnabled && $0.contains(touch.position, surface: frame.surface)
+    private func begin(with touches: [TrackpadTouch], frame: TrackpadTouchFrame) {
+        guard let zone = zones.first(where: { zone in
+            zone.isEnabled && touches.allSatisfy { touch in
+                zone.contains(touch.position, surface: frame.surface)
+            }
         }) else { return }
 
         guard let control = controlProvider(zone.control) else { return }
 
+        control.beginAdjustment()
         let accumulator = TickAccumulator(configuration: configuration(for: zone, control: control))
 
         let value = control.value.clamped(to: 0...1)
         gesture = ActiveGesture(
-            touchIdentifier: touch.identifier,
+            touchIdentifiers: Set(touches.map(\.identifier)),
             zone: zone,
             control: control,
-            lastPosition: touch.position,
+            lastCentroid: centroid(of: touches),
             value: value,
             appliedValue: value,
             accumulator: accumulator
         )
     }
 
-    private func advance(_ current: ActiveGesture, with touch: TrackpadTouch, frame: TrackpadTouchFrame) {
-        // Leaving the strip towards the middle of the trackpad ends the
-        // gesture: the user has stopped adjusting and started pointing.
-        guard current.zone.contains(touch.position, surface: frame.surface, slack: Self.holdSlack) else {
+    private func advance(
+        _ current: ActiveGesture,
+        with touches: [TrackpadTouch],
+        frame: TrackpadTouchFrame
+    ) {
+        // If either finger leaves the strip towards the middle of the
+        // trackpad, the user is no longer deliberately holding the edge.
+        guard touches.allSatisfy({
+            current.zone.contains($0.position, surface: frame.surface, slack: Self.holdSlack)
+        }) else {
             reset()
             return
         }
 
         var updated = current
+        let currentCentroid = centroid(of: touches)
         let travel = current.zone.travel(
-            from: current.lastPosition,
-            to: touch.position,
+            from: current.lastCentroid,
+            to: currentCentroid,
             surface: frame.surface
         )
-        updated.lastPosition = touch.position
+        updated.lastCentroid = currentCentroid
 
         guard travel != 0 else {
             gesture = updated
@@ -167,7 +191,8 @@ final class EdgeGestureEngine {
             onAdjust(ControlAdjustment(
                 identifier: updated.control.identifier,
                 displayName: updated.control.displayName,
-                value: quantised
+                value: quantised,
+                displayID: updated.control.adjustmentDisplayID
             ))
         }
 
@@ -181,6 +206,15 @@ final class EdgeGestureEngine {
         }
 
         gesture = updated
+    }
+
+    private func centroid(of touches: [TrackpadTouch]) -> CGPoint {
+        let count = CGFloat(touches.count)
+        let sum = touches.reduce(into: CGPoint.zero) { partial, touch in
+            partial.x += touch.position.x
+            partial.y += touch.position.y
+        }
+        return CGPoint(x: sum.x / count, y: sum.y / count)
     }
 
     // MARK: - Tuning

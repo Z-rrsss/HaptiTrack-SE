@@ -64,7 +64,7 @@ struct ScrollSettingsView: View {
 
             Section {
                 HStack {
-                    Text("HaptiTrack \(AppInfo.versionDescription)")
+                    Text("\(AppInfo.name) \(AppInfo.versionDescription)")
                         .foregroundStyle(.secondary)
                     Spacer()
                     Button("Restore Defaults") { settings.resetToDefaults() }
