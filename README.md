@@ -233,6 +233,10 @@ documentation are in English. See [CONTRIBUTING.md](CONTRIBUTING.md) before
 submitting a change and [ARCHITECTURE.md](ARCHITECTURE.md) for the internal
 design.
 
+## Acknowledgements
+
+Developed with assistance from OpenAI Codex.
+
 ## License
 
 MIT — see [LICENSE](LICENSE). The original HaptiTrack copyright notice is
