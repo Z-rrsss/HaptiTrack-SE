@@ -6,7 +6,7 @@ HaptiTrack SE is a lightweight macOS menu bar utility that adds a physical "dete
 sensation to trackpad scrolling: every notch of scroll produces a crisp haptic
 pulse, the way a well-machined scroll wheel or a camera dial feels in your hand.
 
-> **Status: 1.2.0.** This is an independent community edition based on
+> **Status: 1.2.1.** This is an independent community edition based on
 > [Andrea De Pasquale's HaptiTrack](https://github.com/andrea-depasquale/HaptiTrack),
 > distributed under the same MIT license. It is not an official upstream
 > release and is not affiliated with BetterDisplay.

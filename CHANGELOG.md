@@ -3,6 +3,17 @@
 All notable changes to HaptiTrack SE are documented here. Versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [1.2.1] - 2026-08-19
+
+### Fixed
+
+- Kept the public app name as HaptiTrack SE while explicitly preserving the
+  Swift module name expected by the Xcode test target.
+
+### Changed
+
+- Updated GitHub Actions checkout from v4 to v7 to use the supported runtime.
+
 ## [1.2.0] - 2026-08-19
 
 ### Added
