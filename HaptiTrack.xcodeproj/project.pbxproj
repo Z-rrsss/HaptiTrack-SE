@@ -342,6 +342,7 @@
 				);
 				MARKETING_VERSION = 1.2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.rachel.HaptiTrack.SE;
+				PRODUCT_MODULE_NAME = HaptiTrack;
 				PRODUCT_NAME = "HaptiTrack SE";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_STRICT_CONCURRENCY = minimal;
@@ -372,6 +373,7 @@
 				);
 				MARKETING_VERSION = 1.2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.rachel.HaptiTrack.SE;
+				PRODUCT_MODULE_NAME = HaptiTrack;
 				PRODUCT_NAME = "HaptiTrack SE";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_STRICT_CONCURRENCY = minimal;
